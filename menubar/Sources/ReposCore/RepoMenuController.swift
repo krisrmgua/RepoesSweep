@@ -15,6 +15,9 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
     private var lastScan: Date?
     private var scanTimer: Timer?
     private var scanning = false
+    /// Set when refresh is requested while a scan is already running (e.g. the
+    /// last Pull all job finished mid-scan). Flushed when that scan ends.
+    private var refreshWhenIdle = false
 
     // Git work runs one job at a time so pulls, cleans, and deletes never overlap.
     private let work = DispatchQueue(label: "repos.work")
@@ -146,7 +149,10 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
     /// Scans every clone under the repo root, then updates the icon and panel.
     /// One GraphQL call loads authored open MRs for badges; per-repo `glab mr list` is gone.
     func refresh(forceFetch: Bool = true) {
-        guard !scanning else { return }
+        guard !scanning else {
+            refreshWhenIdle = true
+            return
+        }
         scanning = true
         model.scanning = true
         DispatchQueue.global(qos: .utility).async {
@@ -167,6 +173,10 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
                 self.model.updated = self.lastScan
                 self.model.scanning = false
                 self.updateIcon()
+                if self.refreshWhenIdle {
+                    self.refreshWhenIdle = false
+                    self.refresh(forceFetch: true)
+                }
             }
         }
     }
@@ -231,20 +241,27 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
         return NSImage(contentsOf: url)
     }
 
-    /// Adds a git job to the serial queue; when it finishes, the repos are scanned again.
+    /// Adds a git job to the serial queue. When the queue drains (last pull,
+    /// clean, or delete finished), rescan so the panel and icon match reality.
     private func enqueue(_ label: String, _ job: @escaping () -> String?) {
-        DispatchQueue.main.async {
-            self.pendingLabels.append(label)
-            self.model.pending = self.pendingLabels
-        }
         work.async {
+            // Record pending on main before the job so a fast finish cannot
+            // clear the label before it was ever appended.
+            DispatchQueue.main.sync {
+                self.pendingLabels.append(label)
+                self.model.pending = self.pendingLabels
+            }
             let err = job()
             DispatchQueue.main.async {
                 self.pendingLabels.removeAll { $0 == label }
                 self.lastResult = err.map { "Failed: \(label) — \($0)" } ?? "Done: \(label)"
                 self.model.pending = self.pendingLabels
                 self.model.result = self.lastResult
-                self.refresh()
+                // Wait for the whole batch (Pull all / Clean all / multi-delete)
+                // so a mid-batch scan cannot eat the final refresh.
+                if self.pendingLabels.isEmpty {
+                    self.refresh(forceFetch: true)
+                }
             }
         }
     }
