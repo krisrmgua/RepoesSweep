@@ -24,7 +24,7 @@ struct RemoteBranch: Equatable, Identifiable {
 }
 
 extension RepoStatus {
-    /// Remotes the panel and clean-state should count, honoring "Only my remote branches".
+    /// Remotes the panel should list, honoring "Only my remote branches".
     var listedRemoteBranches: [RemoteBranch] {
         ReposPrefs.showOnlyMyRemoteBranches ? remoteBranches.filter(\.mine) : remoteBranches
     }

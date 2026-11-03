@@ -92,10 +92,10 @@ Branches with an open GitLab merge request you authored show a small **MR** badg
 
 The mark is the bolt, the diamond, and the tail. The diamond has a black outline and a black check.
 
-- **Light gray** while any clone is out of date, has extra local branches, or has extra remote branches.
-- **Green** only when all three of those are empty, and **Green for passing** is on.
+- **Light gray** while any clone is out of date or has extra local branches.
+- **Green** when those two are empty and **Green for passing** is on. Remote branches do not keep the diamond gray.
 
-The gray or green state counts remote branches even when that section is hidden. The bolts and the tail follow the menu bar: light on a dark bar, dark on a light bar.
+The bolts and the tail follow the menu bar: light on a dark bar, dark on a light bar.
 
 ## Preferences
 

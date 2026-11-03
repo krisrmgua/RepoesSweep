@@ -94,7 +94,8 @@ final class SweepModel: ObservableObject {
 
     static func isClean(_ repos: [RepoStatus], updated: Date?) -> Bool {
         guard updated != nil else { return false }
-        return !repos.contains { $0.behind > 0 || $0.gone || !$0.cleanupBranches.isEmpty || !$0.listedRemoteBranches.isEmpty }
+        // Remote branches do not block green — only out of date and cleanup do.
+        return !repos.contains { $0.behind > 0 || $0.gone || !$0.cleanupBranches.isEmpty }
     }
 
     func returnToOverview() {

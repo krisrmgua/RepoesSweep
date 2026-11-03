@@ -171,8 +171,8 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
         }
     }
 
-    /// Wings follow the menu bar. The center diamond is green only when out of date,
-    /// cleanup, and remote branches are all empty.
+    /// Wings follow the menu bar. The center diamond is green only when out of date
+    /// and cleanup are empty (remote branches are ignored).
     private func updateIcon() {
         let behind = repos.filter { $0.behind > 0 || $0.gone }.count
         let cleanup = repos.filter { !$0.cleanupBranches.isEmpty }.count
