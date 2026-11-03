@@ -20,6 +20,7 @@ struct RemoteBranch: Equatable, Identifiable {
     let name: String
     let merged: Bool   // reachable from origin/<primary>
     let mine: Bool     // tip author email matches this clone's user.email
+    let hasOpenMR: Bool // open GitLab MR with this source branch (via glab)
 }
 
 extension RepoStatus {
@@ -75,14 +76,69 @@ enum ReposModel {
         return nil
     }
 
-    /// Fetches origin (slow) and collects everything the Repos tabs show.
-    static func scan(_ path: String, root: String) -> RepoStatus {
+    /// One GraphQL call: open MRs you authored, keyed by project fullPath (lowercased).
+    /// Replaces per-repo `glab mr list` during a scan.
+    static func authoredOpenMRBranches() -> [String: Set<String>] {
+        let query = """
+        query{currentUser{authoredMergeRequests(state:opened,first:100,sort:UPDATED_DESC){nodes{sourceBranch project{fullPath}}}}}
+        """
+        guard let data = Shell.glabGraphQL(query),
+              let user = data["currentUser"] as? [String: Any],
+              let connection = user["authoredMergeRequests"] as? [String: Any],
+              let nodes = connection["nodes"] as? [[String: Any]] else { return [:] }
+        var map: [String: Set<String>] = [:]
+        for node in nodes {
+            guard let branch = node["sourceBranch"] as? String,
+                  let project = node["project"] as? [String: Any],
+                  let path = project["fullPath"] as? String else { continue }
+            map[path.lowercased(), default: []].insert(branch)
+        }
+        return map
+    }
+
+    /// GitLab project path from `origin`, or nil for non-GitLab remotes.
+    static func gitlabFullPath(forRepo path: String) -> String? {
+        let url = git(path, "remote", "get-url", "origin").1
+        guard !url.isEmpty else { return nil }
+        return gitlabFullPath(fromOriginURL: url)
+    }
+
+    static func gitlabFullPath(fromOriginURL url: String) -> String? {
+        var s = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasSuffix(".git") { s = String(s.dropLast(4)) }
+        if let r = s.range(of: "gitlab.com:", options: .caseInsensitive) {
+            return String(s[r.upperBound...]).lowercased()
+        }
+        if let r = s.range(of: "gitlab.com/", options: .caseInsensitive) {
+            return String(s[r.upperBound...]).lowercased()
+        }
+        return nil
+    }
+
+    /// True when FETCH_HEAD is missing or older than `maxAge` (timer scans can skip fetch).
+    static func needsFetch(_ path: String, maxAge: TimeInterval) -> Bool {
+        let (rc, rel) = git(path, "rev-parse", "--git-path", "FETCH_HEAD")
+        guard rc == 0, !rel.isEmpty else { return true }
+        let fetchHead = (rel as NSString).isAbsolutePath ? rel : (path as NSString).appendingPathComponent(rel)
+        guard let date = (try? FileManager.default.attributesOfItem(atPath: fetchHead))?[.modificationDate] as? Date else {
+            return true
+        }
+        return Date().timeIntervalSince(date) >= maxAge
+    }
+
+    /// Fetches origin when needed and collects everything the Repos tabs show.
+    /// `openMRsByProject` comes from one authored-MR GraphQL call for the whole scan.
+    static func scan(_ path: String, root: String, forceFetch: Bool = true,
+                     openMRsByProject: [String: Set<String>] = [:]) -> RepoStatus {
         let name = path.hasPrefix(root + "/") ? String(path.dropFirst(root.count + 1)) : path
         var s = RepoStatus(name: name, path: path)
         let (rc, br) = git(path, "symbolic-ref", "--quiet", "--short", "HEAD")
         guard rc == 0, !br.isEmpty else { s.error = "detached HEAD"; return s }
         s.branch = br
-        git(path, "fetch", "--quiet", "--prune", "origin")
+        let fetchAge = TimeInterval(max(60, ReposPrefs.scanMinutes * 60))
+        if forceFetch || needsFetch(path, maxAge: fetchAge) {
+            git(path, "fetch", "--quiet", "--prune", "origin")
+        }
         guard git(path, "rev-parse", "--verify", "--quiet", "HEAD").0 == 0 else { s.error = "empty repo"; return s }
 
         let (crc, counts) = git(path, "rev-list", "--left-right", "--count", "HEAD...@{upstream}")
@@ -90,9 +146,12 @@ enum ReposModel {
             let parts = counts.split(whereSeparator: { $0 == "\t" || $0 == " " })
             if parts.count >= 2 { s.behind = Int(parts[1]) ?? 0 }
         }
-        s.dirtyCount = git(path, "status", "--porcelain").1.split(separator: "\n").count
-        let sb = git(path, "status", "-sb").1.split(separator: "\n").first.map(String.init) ?? ""
-        s.gone = sb.contains("[gone]")
+        let (src, status) = git(path, "status", "--porcelain", "-b")
+        if src == 0 {
+            let lines = status.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            s.gone = lines.first?.contains("[gone]") == true
+            s.dirtyCount = max(0, lines.count - 1)
+        }
 
         guard let primary = primaryBranch(path) else { return s }
         s.primary = primary
@@ -100,11 +159,17 @@ enum ReposModel {
         if lrc == 0 {
             s.cleanupBranches = locals.split(separator: "\n").map(String.init).filter { $0 != primary && !$0.isEmpty }
         }
-        s.remoteBranches = remoteBranches(path, primary: primary)
+        let openMRs: Set<String>
+        if ReposPrefs.showRemoteBranches, let fullPath = gitlabFullPath(forRepo: path) {
+            openMRs = openMRsByProject[fullPath] ?? []
+        } else {
+            openMRs = []
+        }
+        s.remoteBranches = remoteBranches(path, primary: primary, openMRs: openMRs)
         return s
     }
 
-    static func remoteBranches(_ path: String, primary: String) -> [RemoteBranch] {
+    static func remoteBranches(_ path: String, primary: String, openMRs: Set<String> = []) -> [RemoteBranch] {
         let me = normalizeEmail(git(path, "config", "user.email").1)
         let (rc, out) = git(path, "for-each-ref", "--format=%(refname)%09%(symref)%09%(authoremail)", "refs/remotes/origin/")
         guard rc == 0 else { return [] }
@@ -119,7 +184,8 @@ enum ReposModel {
             if ref == prefix + primary { continue }
             let author = parts.count > 2 ? normalizeEmail(String(parts[2])) : ""
             let mine = !me.isEmpty && !author.isEmpty && me == author
-            result.append(RemoteBranch(name: String(ref.dropFirst(prefix.count)), merged: merged.contains(ref), mine: mine))
+            let name = String(ref.dropFirst(prefix.count))
+            result.append(RemoteBranch(name: name, merged: merged.contains(ref), mine: mine, hasOpenMR: openMRs.contains(name)))
         }
         return result.sorted { $0.name.lowercased() < $1.name.lowercased() }
     }
@@ -226,14 +292,43 @@ enum ReposModel {
     }
 
     /// Checks out the primary branch, deletes every other local branch, then pulls.
+    /// Re-reads heads at clean time so a stale panel list cannot fail on already-gone branches.
     static func clean(_ s: RepoStatus) -> String? {
-        guard let primary = s.primary else { return "no main/master" }
-        let (crc, cout) = git(s.path, "checkout", primary)
+        guard let primary = s.primary ?? primaryBranch(s.path) else { return "no main/master" }
+        if heldByOtherWorktree(s.path, primary) {
+            return "\(primary) is checked out in another worktree"
+        }
+        var (crc, cout) = git(s.path, "checkout", primary)
+        let low = cout.lowercased()
+        if crc != 0, ["overwritten", "local changes", "uncommitted", "stash"].contains(where: { low.contains($0) }) {
+            git(s.path, "stash", "push", "-u", "-m", "Repoes Sweep before clean")
+            (crc, cout) = git(s.path, "checkout", primary)
+        }
         if crc != 0 { return "checkout \(primary): \(String(cout.prefix(120)))" }
+
+        let (lrc, locals) = git(s.path, "for-each-ref", "--format=%(refname:short)", "refs/heads/")
+        let branches = (lrc == 0
+            ? locals.split(separator: "\n").map(String.init)
+            : s.cleanupBranches)
+            .filter { $0 != primary && !$0.isEmpty }
+
         var failed: [String] = []
-        for b in s.cleanupBranches where git(s.path, "branch", "-D", b).0 != 0 { failed.append(b) }
+        for b in branches {
+            if heldByOtherWorktree(s.path, b) {
+                failed.append("\(b) (other worktree)")
+                continue
+            }
+            let (rc, out) = git(s.path, "branch", "-D", "--", b)
+            if rc == 0 { continue }
+            let err = out.lowercased()
+            // Already gone — desired end state.
+            if err.contains("not found") || err.contains("doesn't exist") || err.contains("does not exist") {
+                continue
+            }
+            failed.append("\(b): \(String(out.split(separator: "\n").first.map(String.init) ?? out).prefix(80))")
+        }
         _ = git(s.path, "pull", "--ff-only")
-        return failed.isEmpty ? nil : "couldn't delete: \(failed.joined(separator: ", "))"
+        return failed.isEmpty ? nil : "couldn't delete: \(failed.joined(separator: "; "))"
     }
 
     /// Deletes every listed origin branch. The primary branch is refused one by one.

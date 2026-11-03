@@ -2,11 +2,32 @@ import AppKit
 import SwiftUI
 
 struct RemoteDeleteRequest: Identifiable {
-    let repo: String
-    let path: String
-    let primary: String?
-    let branches: [String]
-    var id: String { path + "\u{0}" + branches.joined(separator: ",") }
+    struct Item {
+        let repo: String
+        let path: String
+        let primary: String?
+        let branches: [String]
+    }
+
+    let items: [Item]
+    /// "all" / "merged" for cross-repo actions; nil for a single-repo delete.
+    let scope: String?
+
+    var branchCount: Int { items.reduce(0) { $0 + $1.branches.count } }
+    var repoCount: Int { items.count }
+    var id: String {
+        (scope ?? "repo") + "\u{0}" + items.map { "\($0.path):\($0.branches.joined(separator: ","))" }.joined(separator: "|")
+    }
+
+    init(repo: String, path: String, primary: String?, branches: [String]) {
+        items = [Item(repo: repo, path: path, primary: primary, branches: branches)]
+        scope = nil
+    }
+
+    init(items: [Item], scope: String) {
+        self.items = items
+        self.scope = scope
+    }
 }
 
 final class SweepModel: ObservableObject {
@@ -37,6 +58,39 @@ final class SweepModel: ObservableObject {
     var cleanup: [RepoStatus] { repos.filter { !$0.cleanupBranches.isEmpty } }
     var remotes: [RepoStatus] { repos.filter { !$0.listedRemoteBranches.isEmpty } }
     var remoteCount: Int { repos.reduce(0) { $0 + $1.listedRemoteBranches.count } }
+    var mergedRemoteCount: Int {
+        repos.reduce(0) { $0 + $1.listedRemoteBranches.filter(\.merged).count }
+    }
+
+    enum RemoteDeleteFilter { case all, merged, withoutMR }
+
+    var remoteWithoutMRCount: Int {
+        repos.reduce(0) { $0 + $1.listedRemoteBranches.filter { !$0.hasOpenMR }.count }
+    }
+
+    func remoteDeleteRequest(_ filter: RemoteDeleteFilter) -> RemoteDeleteRequest? {
+        let items: [RemoteDeleteRequest.Item] = remotes.compactMap { repo in
+            let branches = repo.listedRemoteBranches
+                .filter {
+                    switch filter {
+                    case .all: return true
+                    case .merged: return $0.merged
+                    case .withoutMR: return !$0.hasOpenMR
+                    }
+                }
+                .map(\.name)
+            guard !branches.isEmpty else { return nil }
+            return RemoteDeleteRequest.Item(repo: repo.name, path: repo.path, primary: repo.primary, branches: branches)
+        }
+        guard !items.isEmpty else { return nil }
+        let scope: String
+        switch filter {
+        case .all: scope = "all"
+        case .merged: scope = "merged"
+        case .withoutMR: scope = "withoutMR"
+        }
+        return RemoteDeleteRequest(items: items, scope: scope)
+    }
 
     static func isClean(_ repos: [RepoStatus], updated: Date?) -> Bool {
         guard updated != nil else { return false }
@@ -237,6 +291,23 @@ struct SweepPanel: View {
                     } else if model.remotes.isEmpty {
                         empty("No remote branches")
                     } else {
+                        HStack(spacing: 8) {
+                            Spacer(minLength: 0)
+                            if model.mergedRemoteCount > 0 {
+                                Button("Delete all merged") {
+                                    model.confirmDelete = model.remoteDeleteRequest(.merged)
+                                }.buttonStyle(SweepInlineStyle())
+                            }
+                            if model.remoteWithoutMRCount > 0 {
+                                Button("Delete all without MR") {
+                                    model.confirmDelete = model.remoteDeleteRequest(.withoutMR)
+                                }.buttonStyle(SweepInlineStyle())
+                            }
+                            Button("Delete all") {
+                                model.confirmDelete = model.remoteDeleteRequest(.all)
+                            }.buttonStyle(SweepInlineStyle())
+                        }.padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 4)
+                        divider
                         ForEach(Array(model.remotes.enumerated()), id: \.element.id) { index, repo in
                             if index > 0 { divider }
                             VStack(alignment: .leading, spacing: 0) {
@@ -253,6 +324,18 @@ struct SweepPanel: View {
                                 ForEach(repo.listedRemoteBranches) { branch in
                                     HStack(spacing: 8) {
                                         Text(branch.name).font(.system(size: 12)).lineLimit(1)
+                                        if branch.hasOpenMR {
+                                            Text("MR")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundColor(SweepStyle.cyan)
+                                                .padding(.horizontal, 5)
+                                                .padding(.vertical, 1)
+                                                .background(SweepStyle.cyan.opacity(0.14))
+                                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(SweepStyle.cyan.opacity(0.45)))
+                                                .cornerRadius(4)
+                                                .help("Open merge request on this branch")
+                                                .accessibilityLabel("Open merge request")
+                                        }
                                         Spacer(minLength: 6)
                                         Text(branch.merged ? "merged" : "not merged")
                                             .font(.system(size: 10, weight: .medium))
@@ -305,7 +388,7 @@ struct SweepPanel: View {
                  ? "Open sections stay open after you close the panel."
                  : "Open sections collapse each time you close the panel.")
                 .font(.system(size: 10)).foregroundColor(SweepStyle.secondary).padding(.horizontal, 2)
-            Text("Each scan fetches every clone under the repo root.")
+            Text("Timer scans skip fetch when a clone was fetched recently. Refresh always fetches.")
                 .font(.system(size: 10)).foregroundColor(SweepStyle.secondary).padding(.horizontal, 2)
         }
     }
@@ -318,14 +401,29 @@ struct SweepPanel: View {
     }
 
     private func deleteConfirm(_ request: RemoteDeleteRequest) -> some View {
-        let all = request.branches.count > 1
-        let kept = request.primary.map { "\($0) stays." } ?? "The primary branch stays."
+        let title: String
+        let detail: String
+        if request.scope == "merged" {
+            title = "Delete \(request.branchCount) merged remote branches?"
+            detail = "This deletes every merged origin branch listed across \(request.repoCount) repos. Primary branches stay. It cannot be undone from here."
+        } else if request.scope == "withoutMR" {
+            title = "Delete \(request.branchCount) remote branches without an MR?"
+            detail = "This deletes every listed origin branch with no open merge request across \(request.repoCount) repos. Branches with an MR badge stay. Primary branches stay. It cannot be undone from here."
+        } else if request.scope == "all" {
+            title = "Delete \(request.branchCount) remote branches?"
+            detail = "This deletes every listed origin branch across \(request.repoCount) repos. Primary branches stay. It cannot be undone from here."
+        } else if let item = request.items.first, request.branchCount > 1 {
+            let kept = item.primary.map { "\($0) stays." } ?? "The primary branch stays."
+            title = "Delete \(request.branchCount) remote branches?"
+            detail = "This deletes every origin branch listed for \(item.repo). \(kept) It cannot be undone from here."
+        } else {
+            let item = request.items.first
+            title = "Delete origin/\(item?.branches.first ?? "")?"
+            detail = "This deletes the branch on the remote for \(item?.repo ?? "this repo"). It cannot be undone from here."
+        }
         return VStack(alignment: .leading, spacing: 10) {
-            Text(all ? "Delete \(request.branches.count) remote branches?" : "Delete origin/\(request.branches.first ?? "")?")
-                .font(.system(size: 13, weight: .semibold))
-            Text(all
-                 ? "This deletes every origin branch listed for \(request.repo). \(kept) It cannot be undone from here."
-                 : "This deletes the branch on the remote for \(request.repo). It cannot be undone from here.")
+            Text(title).font(.system(size: 13, weight: .semibold))
+            Text(detail)
                 .font(.system(size: 11)).foregroundColor(SweepStyle.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Cancel") { model.confirmDelete = nil }.buttonStyle(SweepActionStyle())
