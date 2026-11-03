@@ -223,6 +223,10 @@ swift build
 
 `RepoesSweep --dump` prints each clone after a real fetch. `RepoesSweep --pull-fix <path>` runs Pull & Fix on one clone. Both use your real checkouts. Do not run the Swift and Electron installers side by side: both install `~/Applications/Repoes Sweep.app`.
 
+## Version
+
+The shipping version is `package.json` → `version` (currently **0.2.0**). The panel footer shows it as `v0.2.0`. Bump that field before each release you push and package; Electron Builder embeds it so `app.getVersion()` matches.
+
 ## License
 
 [MIT](LICENSE). Copyright 2026 Kristopher Simmons.

@@ -554,6 +554,10 @@ button.danger {
   flex: 1;
 }
 
+.foot .ver {
+  flex: 0 0 auto;
+}
+
 .link {
   appearance: none;
   border: 0;
