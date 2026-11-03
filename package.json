@@ -1,0 +1,80 @@
+{
+  "name": "repoes-sweep",
+  "productName": "Repoes Sweep",
+  "version": "0.1.0",
+  "description": "Tray app that keeps your git clones caught up, for macOS and Windows",
+  "main": "dist-electron/main.js",
+  "author": "Kristopher Simmons",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:assets": "node scripts/copy-mark.mjs",
+    "dev:ui": "vite",
+    "build:ui": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json",
+    "build": "npm run build:assets && npm run typecheck && npm run build:ui && npm run build:electron",
+    "start": "npm run build && electron .",
+    "dev": "npm run build:assets && npm run build:electron && concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && REPOES_DEV=1 electron .\"",
+    "pack:mac": "npm run build && electron-builder --mac",
+    "pack:win": "npm run build && electron-builder --win",
+    "pack": "npm run build && electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "com.kris.repos",
+    "productName": "Repoes Sweep",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "zip"
+      ],
+      "extendInfo": {
+        "LSUIElement": true
+      }
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "concurrently": "^9.1.2",
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2",
+    "wait-on": "^8.0.3"
+  },
+  "allowScripts": {
+    "electron@35.7.5": true,
+    "esbuild@0.25.12": true
+  }
+}
