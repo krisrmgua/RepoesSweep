@@ -14,7 +14,7 @@ Pull & Fix can create a git stash named `Repoes Sweep auto-stash` or `Repoes Swe
 
 ## How commands run
 
-`git` is started through `/usr/bin/env` with an argument array. Paths come from the clone the app discovered under the configured root. Remote branch names are the names `git for-each-ref` reported for `origin`. Delete refuses the primary branch and any name that starts with `-`.
+`git` is started through `/usr/bin/env` with an argument array. Paths come from the clone the app discovered under the configured root. Remote branch names are the names `git for-each-ref` reported for `origin`. Delete refuses the primary branch and any name that starts with `-`. Open MR badges use one optional `glab` GraphQL query for your authored open MRs; failure just means no badges.
 
 Clean deletes local branches with `git branch -D`. Delete and Delete all run `git push origin --delete` after you confirm. Both are destructive. The confirmation is the only prompt.
 

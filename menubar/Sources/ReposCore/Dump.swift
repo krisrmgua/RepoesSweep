@@ -4,8 +4,9 @@ import Foundation
 public enum RepoDump {
     public static func run() {
         print("== Repoes Sweep under \(ReposModel.root)")
+        let openMRs = ReposPrefs.showRemoteBranches ? ReposModel.authoredOpenMRBranches() : [:]
         for path in ReposModel.discover() {
-            let s = ReposModel.scan(path, root: ReposModel.root)
+            let s = ReposModel.scan(path, root: ReposModel.root, openMRsByProject: openMRs)
             let merged = s.remoteBranches.filter { $0.merged }.count
             print("  \(s.name) branch=\(s.branch) behind=\(s.behind) primary=\(s.primary ?? "-") cleanup=\(s.cleanupBranches.count) remote=\(s.remoteBranches.count) merged=\(merged)\(s.error.map { " error=\($0)" } ?? "")")
         }

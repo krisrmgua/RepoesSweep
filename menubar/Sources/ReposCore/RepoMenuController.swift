@@ -76,7 +76,7 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
     }
 
     private func wireActions() {
-        model.refresh = { [weak self] in self?.refresh() }
+        model.refresh = { [weak self] in self?.refresh(forceFetch: true) }
         model.pull = { [weak self] repo in self?.enqueue("Pull \(repo.name)") { ReposModel.pull(repo.path) } }
         model.pullFix = { [weak self] repo in self?.enqueue("Pull & Fix \(repo.name)") { ReposModel.pullAndFix(repo) } }
         model.clean = { [weak self] repo in self?.enqueue("Clean \(repo.name)") { ReposModel.clean(repo) } }
@@ -90,11 +90,26 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
             for repo in list { self?.enqueue("Clean \(repo.name)") { ReposModel.clean(repo) } }
         }
         model.deleteRemote = { [weak self] request in
-            let label = request.branches.count == 1
-                ? "Delete origin/\(request.branches[0])"
-                : "Delete \(request.branches.count) branches on \(request.repo)"
+            let label: String
+            if request.scope == "merged" {
+                label = "Delete \(request.branchCount) merged remotes"
+            } else if request.scope == "withoutMR" {
+                label = "Delete \(request.branchCount) remotes without MR"
+            } else if request.scope == "all" {
+                label = "Delete \(request.branchCount) remotes"
+            } else if request.branchCount == 1, let name = request.items.first?.branches.first {
+                label = "Delete origin/\(name)"
+            } else {
+                label = "Delete \(request.branchCount) branches on \(request.items.first?.repo ?? "repos")"
+            }
             self?.enqueue(label) {
-                ReposModel.deleteRemotes(request.path, branches: request.branches, primary: request.primary)
+                var failed: [String] = []
+                for item in request.items {
+                    if let err = ReposModel.deleteRemotes(item.path, branches: item.branches, primary: item.primary) {
+                        failed.append("\(item.repo): \(err)")
+                    }
+                }
+                return failed.isEmpty ? nil : String(failed.joined(separator: "; ").prefix(200))
             }
         }
         model.prefsChanged = { [weak self] in
@@ -117,28 +132,31 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
         }
         model.maximumHeight = min(720, (button.window?.screen?.visibleFrame.height ?? 800) - 40)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        if lastScan.map({ Date().timeIntervalSince($0) > 120 }) ?? true { refresh() }
+        if lastScan.map({ Date().timeIntervalSince($0) > 120 }) ?? true { refresh(forceFetch: true) }
     }
 
     private func scheduleTimer() {
         scanTimer?.invalidate()
         scanTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(ReposPrefs.scanMinutes * 60), repeats: true) { [weak self] _ in
-            self?.refresh()
+            // Timer pass reuses recent FETCH_HEAD; manual refresh always fetches.
+            self?.refresh(forceFetch: false)
         }
     }
 
-    /// Fetches and scans every clone under the repo root, then updates the icon and panel.
-    func refresh() {
+    /// Scans every clone under the repo root, then updates the icon and panel.
+    /// One GraphQL call loads authored open MRs for badges; per-repo `glab mr list` is gone.
+    func refresh(forceFetch: Bool = true) {
         guard !scanning else { return }
         scanning = true
         model.scanning = true
         DispatchQueue.global(qos: .utility).async {
             let root = ReposModel.root
             let paths = ReposModel.discover()
+            let openMRs = ReposPrefs.showRemoteBranches ? ReposModel.authoredOpenMRBranches() : [:]
             var results = [RepoStatus?](repeating: nil, count: paths.count)
             let lock = NSLock()
             DispatchQueue.concurrentPerform(iterations: paths.count) { i in
-                let status = ReposModel.scan(paths[i], root: root)
+                let status = ReposModel.scan(paths[i], root: root, forceFetch: forceFetch, openMRsByProject: openMRs)
                 lock.lock(); results[i] = status; lock.unlock()
             }
             DispatchQueue.main.async {

@@ -76,7 +76,7 @@ A stash created here is labeled `Repoes Sweep auto-stash` or `Repoes Sweep befor
 
 A clone is listed when it has local branches other than the primary branch.
 
-**Clean** checks out the primary branch, deletes those other local branches with `git branch -D`, then pulls with `--ff-only`. `-D` deletes the branch even when it is not merged. This does not delete anything on the remote.
+**Clean** checks out the primary branch (stashing local edits if needed), deletes every other local head with `git branch -D`, then pulls with `--ff-only`. It re-reads branches at clean time, so an already-gone name is not an error. Branches checked out in another worktree are reported and skipped. `-D` deletes the branch even when it is not merged. This does not delete anything on the remote.
 
 ### Remote branches
 
@@ -84,7 +84,9 @@ Shown when **Show remote branches** is on. Each clone lists `origin` branches ot
 
 **Only my remote branches** (on by default, nested under that preference) keeps tips whose author email matches the clone's `user.email`. Turn it off to see every `origin` branch again.
 
-**Delete** and **Delete all** ask first, then run `git push origin --delete` for those names. The primary branch is not in the list and is refused if a name matches it. This removes the branch on the remote. It cannot be undone from the app.
+Branches with an open GitLab merge request you authored show a small **MR** badge next to the name (one `glab` GraphQL call per scan when the section is on).
+
+**Delete**, per-repo **Delete all**, and section-wide **Delete all** / **Delete all merged** / **Delete all without MR** ask first, then run `git push origin --delete` for those names. The primary branch is not in the list and is refused if a name matches it. This removes the branch on the remote. It cannot be undone from the app.
 
 ## Menu-bar icon
 
@@ -103,7 +105,7 @@ The gray or green state counts remote branches even when that section is hidden.
 | Show remote branches | On. Hides the Remote branches section when off. |
 | Only my remote branches | On. Shown under Show remote branches. Keeps tips authored by this clone's `user.email`. |
 | Remember open sections | Off. Closing the panel collapses every section. On keeps the ones you left open, including after a restart. |
-| Scan every | 10 minutes. Choices run from 5 minutes to 1 day. |
+| Scan every | 10 minutes. Choices run from 5 minutes to 1 day. Timer scans skip `git fetch` when FETCH_HEAD is still fresh; the refresh button always fetches. |
 
 Preferences live in UserDefaults under `com.kris.repos`. They are not credentials.
 
