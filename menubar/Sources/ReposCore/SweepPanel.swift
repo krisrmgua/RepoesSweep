@@ -35,6 +35,8 @@ final class SweepModel: ObservableObject {
     @Published var scanning = false
     @Published var updated: Date?
     @Published var pending: [String] = []
+    /// Live job line, e.g. "Pull foo · 2 of 5 · 3 left". Nil when idle.
+    @Published var activity: String?
     @Published var result: String?
     @Published var settings = false
     @Published var confirmDelete: RemoteDeleteRequest?
@@ -226,9 +228,10 @@ struct SweepPanel: View {
 
     private var overview: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if !model.pending.isEmpty {
-                Text("Working: \(model.pending[0])" + (model.pending.count > 1 ? " (+\(model.pending.count - 1) queued)" : ""))
+            if let activity = model.activity {
+                Text("Working: \(activity)")
                     .font(.system(size: 11)).foregroundColor(SweepStyle.amber)
+                    .lineLimit(2)
             }
             if let result = model.result {
                 Text(result).font(.system(size: 11)).foregroundColor(SweepStyle.secondary).lineLimit(2)

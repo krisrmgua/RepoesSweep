@@ -55,7 +55,7 @@ A detached HEAD or an empty repo is reported as an error for that clone and left
 
 ## How the panel works
 
-A scan runs when the app launches, on the interval you pick, and when you press refresh. Opening the panel also scans if the last one is more than two minutes old. Each scan fetches `origin` with `--prune`. Pull, Pull & Fix, Clean, remote deletes, and the matching “all” actions also rescan once their job queue is empty, so counts and the green icon update without a manual refresh.
+A scan runs when the app launches, on the interval you pick, and when you press refresh. Opening the panel also scans if the last one is more than two minutes old. Each scan fetches `origin` with `--prune`. Pull, Pull & Fix, Clean, remote deletes, and the matching “all” actions also rescan once their job queue is empty, so counts and the green icon update without a manual refresh. While jobs run, the overview shows the current action and, for a batch, `N of M` plus how many are left.
 
 The overview has three sections. The count stays on the header while the section is collapsed.
 

@@ -22,6 +22,8 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
     // Git work runs one job at a time so pulls, cleans, and deletes never overlap.
     private let work = DispatchQueue(label: "repos.work")
     private var pendingLabels: [String] = []
+    private var batchTotal = 0
+    private var batchCompleted = 0
     private var lastResult: String?
 
     public init(statusItem: NSStatusItem) {
@@ -248,21 +250,47 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
             // Record pending on main before the job so a fast finish cannot
             // clear the label before it was ever appended.
             DispatchQueue.main.sync {
+                if self.pendingLabels.isEmpty {
+                    self.batchTotal = 0
+                    self.batchCompleted = 0
+                }
+                self.batchTotal += 1
                 self.pendingLabels.append(label)
-                self.model.pending = self.pendingLabels
+                self.publishActivity()
             }
             let err = job()
             DispatchQueue.main.async {
                 self.pendingLabels.removeAll { $0 == label }
+                self.batchCompleted += 1
                 self.lastResult = err.map { "Failed: \(label) — \($0)" } ?? "Done: \(label)"
-                self.model.pending = self.pendingLabels
                 self.model.result = self.lastResult
+                self.publishActivity()
                 // Wait for the whole batch (Pull all / Clean all / multi-delete)
                 // so a mid-batch scan cannot eat the final refresh.
                 if self.pendingLabels.isEmpty {
                     self.refresh(forceFetch: true)
                 }
             }
+        }
+    }
+
+    /// Amber status: current job, plus N of M / left when a batch is running.
+    private func publishActivity() {
+        model.pending = pendingLabels
+        guard let current = pendingLabels.first else {
+            model.activity = nil
+            return
+        }
+        if batchTotal > 1 {
+            let step = min(batchCompleted + 1, batchTotal)
+            let left = pendingLabels.count - 1
+            if left > 0 {
+                model.activity = "\(current) · \(step) of \(batchTotal) · \(left) left"
+            } else {
+                model.activity = "\(current) · \(step) of \(batchTotal)"
+            }
+        } else {
+            model.activity = current
         }
     }
 }
