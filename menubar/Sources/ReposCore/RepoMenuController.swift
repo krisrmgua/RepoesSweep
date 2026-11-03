@@ -158,7 +158,7 @@ public final class RepoMenuController: NSObject, NSPopoverDelegate {
     private func updateIcon() {
         let behind = repos.filter { $0.behind > 0 || $0.gone }.count
         let cleanup = repos.filter { !$0.cleanupBranches.isEmpty }.count
-        let remote = repos.reduce(0) { $0 + $1.remoteBranches.count }
+        let remote = repos.reduce(0) { $0 + $1.listedRemoteBranches.count }
         let clean = SweepModel.isClean(repos, updated: lastScan) && ReposPrefs.greenForPassing
         let diamond = clean ? Self.cleanGreen : Self.idleGray
         let appearance = statusItem.button?.effectiveAppearance ?? NSApp.effectiveAppearance
