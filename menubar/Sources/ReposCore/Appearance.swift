@@ -1,10 +1,11 @@
 import AppKit
 
 /// Options that Repoes Sweep saves in UserDefaults. Defaults: green for passing on,
-/// remote branches shown, sections collapse when the panel closes, scan every 10 minutes.
+/// remote branches shown (only yours), sections collapse when the panel closes, scan every 10 minutes.
 enum ReposPrefs {
     private static let greenKey = "repos.greenForPassing"
     private static let remoteKey = "repos.showRemoteBranches"
+    private static let myRemoteKey = "repos.showOnlyMyRemoteBranches"
     private static let rememberKey = "repos.rememberExpanded"
     private static let expandedKey = "repos.expandedSections"
     private static let scanKey = "repos.scanMinutes"
@@ -18,6 +19,11 @@ enum ReposPrefs {
     static var showRemoteBranches: Bool {
         get { bool(remoteKey, true) }
         set { UserDefaults.standard.set(newValue, forKey: remoteKey) }
+    }
+    /// When remote branches are shown, keep only tips whose author email matches this clone's `user.email`.
+    static var showOnlyMyRemoteBranches: Bool {
+        get { bool(myRemoteKey, true) }
+        set { UserDefaults.standard.set(newValue, forKey: myRemoteKey) }
     }
     /// On keeps Out of date, Cleanup, and Remote branches open after the panel closes.
     static var rememberExpanded: Bool {

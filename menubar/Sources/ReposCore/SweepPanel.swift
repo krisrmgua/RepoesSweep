@@ -35,12 +35,12 @@ final class SweepModel: ObservableObject {
 
     var outdated: [RepoStatus] { repos.filter { $0.behind > 0 || $0.gone } }
     var cleanup: [RepoStatus] { repos.filter { !$0.cleanupBranches.isEmpty } }
-    var remotes: [RepoStatus] { repos.filter { !$0.remoteBranches.isEmpty } }
-    var remoteCount: Int { repos.reduce(0) { $0 + $1.remoteBranches.count } }
+    var remotes: [RepoStatus] { repos.filter { !$0.listedRemoteBranches.isEmpty } }
+    var remoteCount: Int { repos.reduce(0) { $0 + $1.listedRemoteBranches.count } }
 
     static func isClean(_ repos: [RepoStatus], updated: Date?) -> Bool {
         guard updated != nil else { return false }
-        return !repos.contains { $0.behind > 0 || $0.gone || !$0.cleanupBranches.isEmpty || !$0.remoteBranches.isEmpty }
+        return !repos.contains { $0.behind > 0 || $0.gone || !$0.cleanupBranches.isEmpty || !$0.listedRemoteBranches.isEmpty }
     }
 
     func returnToOverview() {
@@ -247,10 +247,10 @@ struct SweepPanel: View {
                                         .lineLimit(1)
                                     Spacer(minLength: 6)
                                     Button("Delete all") {
-                                        model.confirmDelete = RemoteDeleteRequest(repo: repo.name, path: repo.path, primary: repo.primary, branches: repo.remoteBranches.map(\.name))
+                                        model.confirmDelete = RemoteDeleteRequest(repo: repo.name, path: repo.path, primary: repo.primary, branches: repo.listedRemoteBranches.map(\.name))
                                     }.buttonStyle(SweepInlineStyle())
                                 }.padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 4)
-                                ForEach(repo.remoteBranches) { branch in
+                                ForEach(repo.listedRemoteBranches) { branch in
                                     HStack(spacing: 8) {
                                         Text(branch.name).font(.system(size: 12)).lineLimit(1)
                                         Spacer(minLength: 6)
@@ -276,6 +276,13 @@ struct SweepPanel: View {
                 prefToggle("Green for passing", ReposPrefs.greenForPassing) { ReposPrefs.greenForPassing = $0 }
                 divider
                 prefToggle("Show remote branches", ReposPrefs.showRemoteBranches) { ReposPrefs.showRemoteBranches = $0 }
+                if ReposPrefs.showRemoteBranches {
+                    divider
+                    prefToggle("Only my remote branches", ReposPrefs.showOnlyMyRemoteBranches) {
+                        ReposPrefs.showOnlyMyRemoteBranches = $0
+                    }
+                    .padding(.leading, 14)
+                }
                 divider
                 prefToggle("Remember open sections", ReposPrefs.rememberExpanded) {
                     ReposPrefs.rememberExpanded = $0

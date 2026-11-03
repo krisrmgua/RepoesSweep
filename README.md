@@ -82,6 +82,8 @@ A clone is listed when it has local branches other than the primary branch.
 
 Shown when **Show remote branches** is on. Each clone lists `origin` branches other than the primary, marked **merged** when that tip is reachable from `origin/<primary>`.
 
+**Only my remote branches** (on by default, nested under that preference) keeps tips whose author email matches the clone's `user.email`. Turn it off to see every `origin` branch again.
+
 **Delete** and **Delete all** ask first, then run `git push origin --delete` for those names. The primary branch is not in the list and is refused if a name matches it. This removes the branch on the remote. It cannot be undone from the app.
 
 ## Menu-bar icon
@@ -99,6 +101,7 @@ The gray or green state counts remote branches even when that section is hidden.
 |---|---|
 | Green for passing | On. The diamond can turn green, and a merged remote branch is shown in green. |
 | Show remote branches | On. Hides the Remote branches section when off. |
+| Only my remote branches | On. Shown under Show remote branches. Keeps tips authored by this clone's `user.email`. |
 | Remember open sections | Off. Closing the panel collapses every section. On keeps the ones you left open, including after a restart. |
 | Scan every | 10 minutes. Choices run from 5 minutes to 1 day. |
 

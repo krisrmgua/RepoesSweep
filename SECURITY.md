@@ -8,7 +8,7 @@ Open a GitHub issue for a vulnerability in this repository. Do not paste private
 
 ## What the app stores
 
-UserDefaults domain `com.kris.repos` holds the scan interval, whether remote branches are shown, whether a clean state is drawn in green, whether open sections are remembered, and the names of those sections. Those are settings, not credentials.
+UserDefaults domain `com.kris.repos` holds the scan interval, whether remote branches are shown, whether only your remote branches are listed, whether a clean state is drawn in green, whether open sections are remembered, and the names of those sections. Those are settings, not credentials.
 
 Pull & Fix can create a git stash named `Repoes Sweep auto-stash` or `Repoes Sweep before checkout primary`. That stash is inside the clone, in git's own stash list.
 

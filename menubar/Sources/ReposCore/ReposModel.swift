@@ -19,6 +19,14 @@ struct RemoteBranch: Equatable, Identifiable {
     var id: String { name }
     let name: String
     let merged: Bool   // reachable from origin/<primary>
+    let mine: Bool     // tip author email matches this clone's user.email
+}
+
+extension RepoStatus {
+    /// Remotes the panel and clean-state should count, honoring "Only my remote branches".
+    var listedRemoteBranches: [RemoteBranch] {
+        ReposPrefs.showOnlyMyRemoteBranches ? remoteBranches.filter(\.mine) : remoteBranches
+    }
 }
 
 enum ReposModel {
@@ -97,7 +105,8 @@ enum ReposModel {
     }
 
     static func remoteBranches(_ path: String, primary: String) -> [RemoteBranch] {
-        let (rc, out) = git(path, "for-each-ref", "--format=%(refname)%09%(symref)", "refs/remotes/origin/")
+        let me = normalizeEmail(git(path, "config", "user.email").1)
+        let (rc, out) = git(path, "for-each-ref", "--format=%(refname)%09%(symref)%09%(authoremail)", "refs/remotes/origin/")
         guard rc == 0 else { return [] }
         let (mrc, mout) = git(path, "for-each-ref", "--merged=refs/remotes/origin/\(primary)", "--format=%(refname)", "refs/remotes/origin/")
         let merged = mrc == 0 ? Set(mout.split(separator: "\n").map(String.init)) : []
@@ -108,9 +117,16 @@ enum ReposModel {
             let ref = String(parts[0])
             if parts.count > 1 && !parts[1].isEmpty { continue }   // origin/HEAD symbolic ref
             if ref == prefix + primary { continue }
-            result.append(RemoteBranch(name: String(ref.dropFirst(prefix.count)), merged: merged.contains(ref)))
+            let author = parts.count > 2 ? normalizeEmail(String(parts[2])) : ""
+            let mine = !me.isEmpty && !author.isEmpty && me == author
+            result.append(RemoteBranch(name: String(ref.dropFirst(prefix.count)), merged: merged.contains(ref), mine: mine))
         }
         return result.sorted { $0.name.lowercased() < $1.name.lowercased() }
+    }
+
+    /// Strips `<>` and lowercases so `user.email` matches `%(authoremail)`.
+    static func normalizeEmail(_ raw: String) -> String {
+        raw.trimmingCharacters(in: CharacterSet(charactersIn: "<>").union(.whitespacesAndNewlines)).lowercased()
     }
 
     /// `git pull --ff-only`, then a plain pull if that is rejected.
