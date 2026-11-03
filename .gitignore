@@ -4,4 +4,14 @@ menubar/Repos.app/
 menubar/Repoes Sweep.app/
 .swiftpm/
 
+# Electron / Node
+node_modules/
+dist/
+dist-electron/
+release/
+*.log
+.env
+.env.*
+!.env.example
+
 .DS_Store
