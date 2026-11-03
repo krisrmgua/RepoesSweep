@@ -63,6 +63,8 @@ export interface PanelState {
   result: string | null;
   root: string;
   platform: string;
+  /** From package.json via Electron app.getVersion(). */
+  version: string;
   /** Header mark as a data URL (white wings, diamond tinted by state). */
   mark: string | null;
 }

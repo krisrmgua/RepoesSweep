@@ -55,6 +55,7 @@ const gear = document.getElementById("gear")!;
 const spinner = document.getElementById("spinner")!;
 const updatedEl = document.getElementById("updated")!;
 const countEl = document.getElementById("count")!;
+const versionEl = document.getElementById("app-version")!;
 
 function escapeHtml(s: string): string {
   return s
@@ -516,6 +517,7 @@ function render(): void {
   content.innerHTML = settings ? renderSettings(s) : renderOverview(s);
   content.scrollTop = scrollTop;
 
+  versionEl.textContent = `v${s.version}`;
   updatedEl.textContent = s.updated
     ? `Updated ${new Date(s.updated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
     : "Scanning clones…";

@@ -124,6 +124,7 @@ function panelState(): PanelState {
     result: sweeper.result,
     root: sweeper.root,
     platform: process.platform,
+    version: app.getVersion(),
     mark: headerMarkDataUrl(clean),
   };
 }
