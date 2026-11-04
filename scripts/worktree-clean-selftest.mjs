@@ -13,6 +13,11 @@ const git=(cwd,...args)=>execFileSync('git',['-C',cwd,...args],{encoding:'utf8',
 const opts={forceFetch:false,scanMinutes:1440,showRemoteBranches:false,openMRsByProject:new Map()};
 const inspect=repo=>scan(repo,root,opts);
 try {
+  const emptyRemote=path.join(root,'empty.git');git(root,'init','--bare','-b','main',emptyRemote);
+  const emptyClone=path.join(root,'empty-clone');git(root,'clone',emptyRemote,emptyClone);
+  const emptyStatus=await inspect(emptyClone);
+  assert.equal(emptyStatus.empty,true);assert.equal(emptyStatus.error,undefined);
+  console.log('PASS: empty repository is neutral, not a scan error');
   const remote=path.join(root,'origin.git');
   git(root,'init','--bare','-b','main',remote);
   const primary=path.join(root,'primary');git(root,'clone',remote,primary);

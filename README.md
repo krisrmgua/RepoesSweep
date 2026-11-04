@@ -19,7 +19,7 @@ The labeled sheets enlarge the app’s actual rendered artwork 2× for detail. T
 
 [Full menu-bar gallery and regeneration instructions](docs/menu-bar.md)
 
-Local cleanup respects linked Git worktrees: branches in use are retained and excluded from Clean. If the primary branch belongs to another worktree, unused branches can be cleaned without switching or pulling either worktree. The confirmation lists the branches that may be deleted.
+Local cleanup respects linked Git worktrees: branches in use are retained and excluded from Clean. If the primary branch belongs to another worktree, unused branches can be cleaned without switching or pulling either worktree. The confirmation lists the branches that may be deleted. Repos with only protected worktree branches stay out of the attention list, and repos without commits are treated as neutral.
 
 ## Screenshots
 
