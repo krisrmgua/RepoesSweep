@@ -1,5 +1,13 @@
 [
   {
+    "file": "menu-bar.png",
+    "caption": "Actual Repoes Sweep menu-bar marks: green diamond when clean, gray diamond when repository work remains.",
+    "size": {
+      "width": 1080,
+      "height": 920
+    }
+  },
+  {
     "file": "overview.png",
     "caption": "Out-of-date clones, cleanup candidates, and remote branches.",
     "size": {

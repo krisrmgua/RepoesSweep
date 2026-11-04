@@ -9,6 +9,16 @@ Git has to already work in a terminal for those clones. The app does not install
 > **Electron is the cross-platform app.** It lives at the repo root (`electron/`, `src/ui/`, `scripts/`). The original Swift menu-bar app is still in `menubar/` and still builds, but new work goes into the Electron app. The Swift copy will be removed once the Electron build has fully replaced it.
 
 
+## Menu-bar previews
+
+The actual winged mark uses a green diamond when clones are clean/current and gray when work remains. Both dark- and light-menu-bar artwork are shown.
+
+<a href="docs/screenshots/menu-bar.png"><img src="docs/screenshots/menu-bar.png" alt="The actual winged mark uses a green diamond when clones are clean/current and gray when work remains. Both dark- and light-menu-bar artwork are shown." width="540" /></a>
+
+The labeled sheets enlarge the app’s actual rendered artwork 2× for detail. The neutral backdrops are presentation surfaces, not captures of a personal desktop.
+
+[Full menu-bar gallery and regeneration instructions](docs/menu-bar.md)
+
 ## Screenshots
 
 Screenshots of the current Electron interface on macOS, using fictional projects, accounts, jobs, and values. No personal data or live credentials are used.
@@ -18,7 +28,7 @@ Screenshots of the current Electron interface on macOS, using fictional projects
 The gallery includes detail views, settings, and available actions. Click an image for the full-resolution capture.
 
 <details>
-<summary>View all 6 screenshots</summary>
+<summary>View dashboard screenshots</summary>
 
 | Overview | Remote Branches |
 | --- | --- |
