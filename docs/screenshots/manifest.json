@@ -1,0 +1,50 @@
+[
+  {
+    "file": "overview.png",
+    "caption": "Out-of-date clones, cleanup candidates, and remote branches.",
+    "size": {
+      "width": 880,
+      "height": 1352
+    }
+  },
+  {
+    "file": "remote-branches.png",
+    "caption": "Remote branch states, MR badges, and per-branch or bulk actions.",
+    "size": {
+      "width": 880,
+      "height": 1352
+    }
+  },
+  {
+    "file": "pull-fix-confirmation.png",
+    "caption": "Pull & Fix explains the recovery steps before applying them.",
+    "size": {
+      "width": 880,
+      "height": 1352
+    }
+  },
+  {
+    "file": "cleanup-confirmation.png",
+    "caption": "Local cleanup confirmation names the branches and describes its effect.",
+    "size": {
+      "width": 880,
+      "height": 1352
+    }
+  },
+  {
+    "file": "remote-delete-confirmation.png",
+    "caption": "Remote deletion has a separate confirmation.",
+    "size": {
+      "width": 880,
+      "height": 1352
+    }
+  },
+  {
+    "file": "settings.png",
+    "caption": "All preferences and scan interval choices.",
+    "size": {
+      "width": 880,
+      "height": 1044
+    }
+  }
+]
