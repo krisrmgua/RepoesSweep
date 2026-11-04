@@ -1,3 +1,6 @@
+import repoIcon from "@primer/octicons/build/svg/repo-16.svg?raw";
+import checkIcon from "@primer/octicons/build/svg/check-circle-fill-16.svg?raw";
+import alertIcon from "@primer/octicons/build/svg/alert-fill-16.svg?raw";
 import type {
   DeleteScope,
   PanelState,
@@ -45,6 +48,7 @@ let state: PanelState | null = null;
 let view: "overview" | "settings" = "overview";
 let expanded = new Set<string>();
 let expandedLoaded = false;
+let repoFilter: "all" | "updates" | "cleanup" | "remote" = "all";
 let closeConfirm: ((value: boolean) => void) | null = null;
 
 const content = document.getElementById("content")!;
@@ -103,7 +107,9 @@ function requestFit(): void {
   requestAnimationFrame(() => {
     const app = document.getElementById("app");
     if (!app) return;
-    void window.sweep.fitHeight(Math.ceil(app.getBoundingClientRect().height));
+    const header = app.querySelector<HTMLElement>(".top");
+    const footer = app.querySelector<HTMLElement>(".foot");
+    void window.sweep.fitHeight(Math.ceil(content.scrollHeight + (header?.offsetHeight || 0) + (footer?.offsetHeight || 0)));
   });
 }
 
@@ -231,6 +237,19 @@ async function handleAction(act: string, el: HTMLElement): Promise<void> {
   const s = state;
   const repo = repoByPath(el.dataset.path);
   switch (act) {
+    case "filter":
+      repoFilter = el.dataset.filter as typeof repoFilter;
+      content.scrollTop = 0;
+      render();
+      content.querySelector<HTMLButtonElement>(`[data-filter="${repoFilter}"]`)?.focus();
+      return;
+    case "toggleRepo": {
+      const key = `repo-collapsed:${el.dataset.path}`;
+      if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
+      if (s.prefs.rememberExpanded) await window.sweep.setPrefs({expandedSections:[...expanded]});
+      render();
+      return;
+    }
     case "toggle": {
       const key = el.dataset.section!;
       if (expanded.has(key)) expanded.delete(key);
@@ -331,130 +350,49 @@ content.addEventListener("change", async (e) => {
 
 /* ---------- render ---------- */
 
-function sectionHtml(
-  title: string,
-  count: number,
-  tone: string,
-  icon: string,
-  body: () => string,
-): string {
-  const open = expanded.has(title);
-  return `<section class="sect${open ? " open" : ""}">
-    <button type="button" class="sect-head" data-act="toggle" data-section="${escapeHtml(title)}" aria-expanded="${open}">
-      <span class="sect-icon tone-${tone}">${icon}</span>
-      <span class="sect-title">${escapeHtml(title)}</span>
-      <span class="count tone-${tone}">${count}</span>
-      <span class="chev" aria-hidden="true"></span>
-    </button>
-    ${open ? `<div class="card">${body()}</div>` : ""}
-  </section>`;
-}
-
 function empty(text: string): string {
   return `<div class="empty">${escapeHtml(text)}</div>`;
 }
 
-function sectionTone(s: PanelState, list: unknown[], busyTone: string): string {
-  if (!s.updated) return "muted";
-  return list.length ? busyTone : "ok";
-}
-
 function renderOverview(s: PanelState): string {
-  const parts: string[] = [];
-  if (s.activity) {
-    parts.push(`<div class="status-line working">Working: ${escapeHtml(s.activity)}</div>`);
-  }
-  if (s.result) parts.push(`<div class="status-line">${escapeHtml(s.result)}</div>`);
-
   const behind = outdated(s);
-  const pullable = behind.filter((r) => !r.gone);
-  parts.push(
-    sectionHtml(OUT_OF_DATE, behind.length, sectionTone(s, behind, "caution"), ICONS.outdated, () => {
-      if (!s.updated) return empty(s.scanning ? "Scanning clones…" : "No scan yet");
-      if (!behind.length) return empty("All repos up to date");
-      return `<div class="toolbar">
-          <button type="button" class="act" data-act="pullAll"${pullable.length ? "" : " disabled"}>Pull all (${pullable.length})</button>
-          <button type="button" class="act primary" data-act="pullFixAll">Pull &amp; Fix all (${behind.length})</button>
-        </div>${behind
-          .map(
-            (r) => `<div class="row">
-          <div class="row-main">
-            <span class="row-title" title="${escapeHtml(r.path)}">${escapeHtml(r.name)}</span>
-            <span class="row-sub ${r.gone ? "tone-bad" : "tone-warn"}">${r.gone ? "Remote branch gone" : `${r.behind} behind`}</span>
-          </div>
-          ${r.gone ? "" : `<button type="button" class="inline" data-act="pull" data-path="${escapeHtml(r.path)}">Pull</button>`}
-          <button type="button" class="inline" data-act="pullFix" data-path="${escapeHtml(r.path)}">Pull &amp; Fix</button>
-        </div>`,
-          )
-          .join("")}`;
-    }),
-  );
-
   const extra = cleanup(s);
-  parts.push(
-    sectionHtml(CLEANUP, extra.length, sectionTone(s, extra, "caution"), ICONS.cleanup, () => {
-      if (!s.updated) return empty("Scanning clones…");
-      if (!extra.length) return empty("No extra local branches");
-      return `<div class="toolbar">
-          <button type="button" class="act" data-act="cleanAll">Clean all (${extra.length})</button>
-        </div>${extra
-          .map(
-            (r) => `<div class="row">
-          <div class="row-main">
-            <span class="row-title" title="${escapeHtml(r.path)}">${escapeHtml(r.name)}</span>
-            <span class="row-sub" title="${escapeHtml(r.cleanupBranches.join(", "))}">${escapeHtml(r.cleanupBranches.join(", "))}</span>
-          </div>
-          <button type="button" class="inline" data-act="clean" data-path="${escapeHtml(r.path)}">Clean</button>
-        </div>`,
-          )
-          .join("")}`;
-    }),
-  );
-
-  if (s.prefs.showRemoteBranches) {
-    const withRemotes = remotes(s);
-    const all = withRemotes.flatMap((r) => listed(r, s.prefs));
-    const mergedCount = all.filter((b) => b.merged).length;
-    const withoutMRCount = all.filter((b) => !b.hasOpenMR).length;
-    const goodTone = s.prefs.greenForPassing ? "ok" : "muted";
-    parts.push(
-      sectionHtml(REMOTE, all.length, sectionTone(s, withRemotes, "cyan"), ICONS.remote, () => {
-        if (!s.updated) return empty("Scanning clones…");
-        if (!withRemotes.length) return empty("No remote branches");
-        const toolbar = `<div class="toolbar end">
-            ${mergedCount ? '<button type="button" class="inline danger-text" data-act="deleteMerged">Delete all merged</button>' : ""}
-            ${withoutMRCount ? '<button type="button" class="inline danger-text" data-act="deleteWithoutMR">Delete all without MR</button>' : ""}
-            <button type="button" class="inline danger-text" data-act="deleteAll">Delete all</button>
-          </div>`;
-        const groups = withRemotes
-          .map((r) => {
-            const p = escapeHtml(r.path);
-            const branches = listed(r, s.prefs)
-              .map(
-                (b) => `<div class="branch">
-                <span class="branch-name" title="${escapeHtml(b.name)}">${escapeHtml(b.name)}</span>
-                ${b.hasOpenMR ? '<span class="mr" title="Open merge request on this branch">MR</span>' : ""}
-                <span class="spacer"></span>
-                <span class="merge-state tone-${b.merged ? goodTone : "caution"}">${b.merged ? "merged" : "not merged"}</span>
-                <button type="button" class="inline" data-act="deleteBranch" data-path="${p}" data-branch="${escapeHtml(b.name)}">Delete</button>
-              </div>`,
-              )
-              .join("");
-            return `<div class="group">
-              <div class="group-head">
-                <span class="group-title" title="${p}">${escapeHtml(r.name)}  ·  ${escapeHtml(r.primary ?? "primary")}</span>
-                <button type="button" class="inline" data-act="deleteRepo" data-path="${p}">Delete all</button>
-              </div>
-              ${branches}
-            </div>`;
-          })
-          .join("");
-        return toolbar + groups;
-      }),
-    );
+  const remoteRepos = s.prefs.showRemoteBranches ? remotes(s) : [];
+  if (!s.prefs.showRemoteBranches && repoFilter === "remote") repoFilter = "all";
+  const remoteBranches = remoteRepos.flatMap(repo => listed(repo, s.prefs));
+  const filters = [["all","All",null],["updates","Updates",behind.length],["cleanup","Cleanup",extra.length],...(s.prefs.showRemoteBranches ? [["remote","Remote",remoteBranches.length]] : [])];
+  let banner = "";
+  if (s.activity) banner = `<div class="result-banner working" role="status">${ICONS.outdated}<span>Working: ${escapeHtml(s.activity)}</span></div>`;
+  else if (s.result) {
+    const success = s.result.startsWith("Done:");
+    banner = `<div class="result-banner ${success ? "success" : "failure"}" role="status">${success ? checkIcon : alertIcon}<span>${escapeHtml(s.result)}</span></div>`;
   }
-
-  return parts.join("");
+  const tabs = `<div class="repo-filters" role="group" aria-label="Repository tasks">${filters.map(([value,label,count]) => `<button data-act="filter" data-filter="${value}" class="${repoFilter === value ? "selected" : ""}" aria-pressed="${repoFilter === value}">${label}${count !== null ? `<span>${count}</span>` : ""}</button>`).join("")}</div>`;
+  const bulk = `<div class="workbench-toolbar">${(repoFilter === "all" || repoFilter === "updates") && behind.length ? `<button class="act primary" data-act="pullAll" ${behind.every(r => r.gone) ? "disabled" : ""}>Pull all (${behind.filter(r => !r.gone).length})</button><button class="act" data-act="pullFixAll">Pull &amp; Fix all (${behind.length})</button>` : ""}${(repoFilter === "all" || repoFilter === "cleanup") && extra.length ? `<button class="act" data-act="cleanAll">Clean all (${extra.length})</button>` : ""}${(repoFilter === "all" || repoFilter === "remote") && remoteBranches.length ? `<details class="remote-tools"><summary>Remote actions</summary><div>${remoteBranches.some(b => b.merged) ? '<button class="inline danger-text" data-act="deleteMerged">Delete all merged</button>' : ""}${remoteBranches.some(b => !b.hasOpenMR) ? '<button class="inline danger-text" data-act="deleteWithoutMR">Delete all without MR</button>' : ""}<button class="inline danger-text" data-act="deleteAll">Delete all remote</button></div></details>` : ""}</div>`;
+  const repos = s.repos.filter(repo => {
+    const update = repo.behind > 0 || repo.gone;
+    const local = repo.cleanupBranches.length > 0;
+    const remote = s.prefs.showRemoteBranches && listed(repo,s.prefs).length > 0;
+    return repoFilter === "updates" ? update : repoFilter === "cleanup" ? local : repoFilter === "remote" ? remote : update || local || remote || Boolean(repo.error);
+  });
+  const cards = repos.map(repo => {
+    const path = escapeHtml(repo.path);
+    const update = repo.behind > 0 || repo.gone;
+    const open = !expanded.has(`repo-collapsed:${repo.path}`);
+    const status = repo.error ? "Scan error" : repo.gone ? "Remote branch gone" : repo.behind ? `${repo.behind} behind` : "Up to date";
+    const tone = repo.error || repo.gone ? "bad" : repo.behind ? "warn" : s.prefs.greenForPassing ? "ok" : "muted";
+    const tasks: string[] = [];
+    if (repo.error) tasks.push(`<div class="repo-error" role="status">${escapeHtml(repo.error)}</div>`);
+    if (update && (repoFilter === "all" || repoFilter === "updates")) tasks.push(`<div class="work-task"><span class="task-icon tone-warn">${ICONS.outdated}</span><span class="task-description">${repo.gone ? "Remote branch gone" : `Behind ${plural(repo.behind,"commit")}`}</span><div class="task-actions">${!repo.gone ? `<button class="inline primary" data-act="pull" data-path="${path}">Pull</button>` : ""}<button class="inline" data-act="pullFix" data-path="${path}">Pull &amp; Fix</button></div></div>`);
+    if (repo.cleanupBranches.length && (repoFilter === "all" || repoFilter === "cleanup")) tasks.push(`<div class="work-task"><span class="task-icon tone-warn">${ICONS.cleanup}</span><span class="task-description"><span class="task-label">Local ${repo.cleanupBranches.length === 1 ? "branch" : "branches"}:</span> ${escapeHtml(repo.cleanupBranches.join(", "))}</span><div class="task-actions"><button class="inline" data-act="clean" data-path="${path}">Clean</button></div></div>`);
+    if (s.prefs.showRemoteBranches && (repoFilter === "all" || repoFilter === "remote")) {
+      const branches = listed(repo,s.prefs);
+      branches.forEach(branch => tasks.push(`<div class="work-task remote-task"><span class="task-icon tone-ok">${ICONS.remote}</span><span class="task-description"><span class="task-label">Remote branch:</span> ${escapeHtml(branch.name)}</span><span class="branch-state ${branch.merged ? s.prefs.greenForPassing ? "tone-ok" : "tone-muted" : "tone-warn"}">${branch.merged ? "Merged" : "Not merged"}</span>${branch.hasOpenMR ? '<span class="mr" title="Open merge request">MR</span>' : ""}<button class="inline danger-text" data-act="deleteBranch" data-path="${path}" data-branch="${escapeHtml(branch.name)}">Delete</button></div>`));
+      if (branches.length > 1) tasks.push(`<div class="repo-remote-footer"><button class="inline danger-text" data-act="deleteRepo" data-path="${path}">Delete all remote (${branches.length})</button></div>`);
+    }
+    return `<article class="repo-work-card" data-repo-path="${path}"><button class="repo-work-head" data-act="toggleRepo" data-path="${path}" aria-expanded="${open}"><span class="repo-glyph">${repoIcon}</span><span class="repo-identity"><strong>${escapeHtml(repo.name)}</strong><span>${ICONS.remote}${escapeHtml(repo.branch || "Detached HEAD")}${repo.dirtyCount ? ` · ${plural(repo.dirtyCount,"local change")}` : ""}</span></span><span class="repo-status tone-${tone}">${status}</span><span class="chev ${open ? "up" : ""}" aria-hidden="true"></span></button>${open ? `<div class="repo-work-body">${tasks.join("")}</div>` : ""}</article>`;
+  }).join("");
+  return banner + tabs + bulk + (cards || empty(!s.updated ? s.scanning ? "Scanning clones…" : "No scan yet" : repoFilter === "all" ? "All repos are up to date. No cleanup or remote branches to review." : `No ${repoFilter === "updates" ? "out-of-date repos" : repoFilter === "cleanup" ? "local branches to clean" : "remote branches to review"}.`));
 }
 
 function toggleHtml(key: keyof Prefs, label: string, on: boolean, nested = false): string {
@@ -475,7 +413,7 @@ function renderSettings(s: PanelState): string {
     p.showRemoteBranches
       ? toggleHtml("showOnlyMyRemoteBranches", "Only my remote branches", p.showOnlyMyRemoteBranches, true)
       : "",
-    toggleHtml("rememberExpanded", "Remember open sections", p.rememberExpanded),
+    toggleHtml("rememberExpanded", "Remember open repositories", p.rememberExpanded),
     toggleHtml("openAtLogin", "Open at login", p.openAtLogin),
   ].join("");
   const choices = SCAN_CHOICES.map(
@@ -487,8 +425,8 @@ function renderSettings(s: PanelState): string {
     <div class="card"><div class="choices">${choices}</div></div>
     <div class="note">${
       p.rememberExpanded
-        ? "Open sections stay open after you close the panel."
-        : "Open sections collapse each time you close the panel."
+        ? "Repository cards stay open after you close the panel."
+        : "Repository cards start expanded each time you open the panel."
     }</div>
     <div class="note">Timer scans skip fetch when a clone was fetched recently. Refresh always fetches.</div>
     <div class="note">Scanning <span class="mono">${escapeHtml(s.root)}</span></div>`;
@@ -514,6 +452,7 @@ function render(): void {
   spinner.classList.toggle("hidden", !s.scanning);
 
   const scrollTop = content.scrollTop;
+  content.classList.toggle("workbench", !settings);
   content.innerHTML = settings ? renderSettings(s) : renderOverview(s);
   content.scrollTop = scrollTop;
 
