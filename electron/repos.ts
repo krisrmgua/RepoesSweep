@@ -176,7 +176,9 @@ export async function scan(
     await git(repo, "fetch", "--quiet", "--prune", "origin");
   }
   if ((await git(repo, "rev-parse", "--verify", "--quiet", "HEAD"))[0] !== 0) {
-    s.error = "empty repo";
+    const [historyRc, history] = await git(repo, "rev-list", "--all", "--max-count=1");
+    if (historyRc === 0 && !history) s.empty = true;
+    else s.error = "Could not read HEAD";
     return s;
   }
 

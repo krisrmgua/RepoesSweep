@@ -370,10 +370,11 @@ function renderOverview(s: PanelState): string {
   const tabs = `<div class="repo-filters" role="group" aria-label="Repository tasks">${filters.map(([value,label,count]) => `<button data-act="filter" data-filter="${value}" class="${repoFilter === value ? "selected" : ""}" aria-pressed="${repoFilter === value}">${label}${count !== null ? `<span>${count}</span>` : ""}</button>`).join("")}</div>`;
   const bulk = `<div class="workbench-toolbar">${(repoFilter === "all" || repoFilter === "updates") && behind.length ? `<button class="act primary" data-act="pullAll" ${behind.every(r => r.gone) ? "disabled" : ""}>Pull all (${behind.filter(r => !r.gone).length})</button><button class="act" data-act="pullFixAll">Pull &amp; Fix all (${behind.length})</button>` : ""}${(repoFilter === "all" || repoFilter === "cleanup") && extra.length ? `<button class="act" data-act="cleanAll">Clean all (${extra.length})</button>` : ""}${(repoFilter === "all" || repoFilter === "remote") && remoteBranches.length ? `<details class="remote-tools"><summary>Remote actions</summary><div>${remoteBranches.some(b => b.merged) ? '<button class="inline danger-text" data-act="deleteMerged">Delete all merged</button>' : ""}${remoteBranches.some(b => !b.hasOpenMR) ? '<button class="inline danger-text" data-act="deleteWithoutMR">Delete all without MR</button>' : ""}<button class="inline danger-text" data-act="deleteAll">Delete all remote</button></div></details>` : ""}</div>`;
   const repos = s.repos.filter(repo => {
+    if (repo.empty) return false;
     const update = repo.behind > 0 || repo.gone;
     const local = repo.cleanupBranches.length > 0;
     const remote = s.prefs.showRemoteBranches && listed(repo,s.prefs).length > 0;
-    return repoFilter === "updates" ? update : repoFilter === "cleanup" ? local : repoFilter === "remote" ? remote : update || local || remote || Boolean(repo.error) || Boolean(repo.protectedCleanupBranches?.length);
+    return repoFilter === "updates" ? update : repoFilter === "cleanup" ? local : repoFilter === "remote" ? remote : update || local || remote || Boolean(repo.error);
   });
   const cards = repos.map(repo => {
     const path = escapeHtml(repo.path);

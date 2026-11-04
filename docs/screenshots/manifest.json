@@ -180,7 +180,23 @@
     "caption": "Branches in use by linked worktrees are retained and excluded from cleanup.",
     "size": {
       "width": 880,
-      "height": 482
+      "height": 368
+    }
+  },
+  {
+    "file": "empty-repo-neutral.png",
+    "caption": "Empty repos and protected worktrees do not create attention cards.",
+    "size": {
+      "width": 880,
+      "height": 368
+    }
+  },
+  {
+    "file": "real-scan-error.png",
+    "caption": "Genuine scan errors remain visible.",
+    "size": {
+      "width": 880,
+      "height": 484
     }
   }
 ]

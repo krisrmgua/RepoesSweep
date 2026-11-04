@@ -85,7 +85,7 @@ module.exports = {
     "result": "Done: Pull atlas-web",
     "root": "/Users/demo/projects",
     "platform": "darwin",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "mark": image('assets/mark/RepoesSweepMark.png')
   },
   "shots": [
@@ -154,4 +154,9 @@ module.exports.shots.push(
 
 module.exports.shots.push({name:'short-panel',caption:'Long workbench lists scroll while the footer stays visible.',height:440,patch:{repos:structuredClone(module.exports.state.repos),prefs:structuredClone(module.exports.state.prefs)},check:'document.querySelector("main").scrollHeight>document.querySelector("main").clientHeight && document.querySelector(".foot").getBoundingClientRect().bottom<=innerHeight && document.documentElement.scrollWidth<=innerWidth'});
 
-module.exports.shots.push({name:'worktree-protection',caption:'Branches in use by linked worktrees are retained and excluded from cleanup.',height:720,patch:{repos:[{...module.exports.state.repos[0],behind:0,cleanupBranches:[],remoteBranches:[],protectedCleanupBranches:['feature/in-use'],cleanupPrimaryElsewhere:true}],prefs:structuredClone(module.exports.state.prefs),result:null},expect:'Kept for worktrees: feature/in-use',check:'!document.querySelector("[data-act=clean]") && !document.querySelector("[data-act=cleanAll]")'});
+module.exports.shots.push({name:'worktree-protection',caption:'Branches in use by linked worktrees are retained and excluded from cleanup.',height:720,patch:{repos:[{...module.exports.state.repos[0],behind:0,cleanupBranches:[],remoteBranches:[],protectedCleanupBranches:['feature/in-use'],cleanupPrimaryElsewhere:true}],prefs:structuredClone(module.exports.state.prefs),result:null},expect:'All repos are up to date.',check:'!document.querySelector(".repo-work-card") && !document.querySelector("[data-act=clean]")'});
+
+module.exports.shots.push(
+ {name:'empty-repo-neutral',caption:'Empty repos and protected worktrees do not create attention cards.',patch:{repos:[{...module.exports.state.repos[0],behind:0,cleanupBranches:[],remoteBranches:[],protectedCleanupBranches:['feature/in-use']},{...module.exports.state.repos[2],empty:true,behind:0,cleanupBranches:[],remoteBranches:[]}]},expect:'All repos are up to date.',check:'document.querySelectorAll(".repo-work-card").length===0'},
+ {name:'real-scan-error',caption:'Genuine scan errors remain visible.',patch:{repos:[{...module.exports.state.repos[2],behind:0,cleanupBranches:[],remoteBranches:[],error:'Could not inspect local branch worktrees'}]},expect:'Could not inspect local branch worktrees',check:'document.querySelectorAll(".repo-work-card").length===1'}
+);

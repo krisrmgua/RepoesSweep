@@ -27,6 +27,8 @@ export interface RepoStatus {
   dirtyCount: number;
   /** Upstream branch was deleted on the remote. */
   gone: boolean;
+  /** No commits exist yet; not an actionable scan error. */
+  empty?: boolean;
   error?: string;
 }
 
