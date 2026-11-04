@@ -18,6 +18,10 @@ export interface RepoStatus {
   primary?: string;
   /** Local branches other than primary. */
   cleanupBranches: string[];
+  /** Local branches retained because a worktree is using them. */
+  protectedCleanupBranches?: string[];
+  /** Primary belongs to another worktree; local cleanup must not switch or pull it here. */
+  cleanupPrimaryElsewhere?: boolean;
   /** origin/* except HEAD and primary. */
   remoteBranches: RemoteBranch[];
   dirtyCount: number;

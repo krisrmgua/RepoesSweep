@@ -31,3 +31,9 @@ Build, UI/Node/Electron TypeScript checks, and 21 isolated Electron scenarios pa
 Destructive Git semantics and backend implementations are unchanged. Cleanup and remote deletion still require the existing explicit confirmations. The generated mock's MR link artwork is represented by the app's existing MR badge rather than adding a new external-navigation feature.
 
 Packaged macOS arm64 0.3.0, locally signed and signature verified. Installed bundle preserves the separate app-data directory and uses the existing packaged asset resolver for menu-bar artwork.
+
+# Worktree-safe cleanup — 0.3.1
+
+The reported failure occurred because local branch refs are shared by linked worktrees. Scans now exclude branches in use by other worktrees (and retain the current branch when primary is owned elsewhere). Repo cards explain retained branches. Clean rechecks ownership, deletes only confirmed branches still eligible, handles already-cleaned queued requests, and leaves a linked worktree on its current branch without touching the primary owner. Ordinary clones retain checkout-primary cleanup; pull errors now propagate rather than being silently discarded.
+
+Validation: full build/typechecks passed; temporary Git integration tests verify dirty primary/linked worktrees retain their HEADs and edits, shared-ref stale requests succeed, a branch claimed after scan is retained, unconfirmed new branches survive, normal single-clone cleanup works, and pull failures are visible. Existing Pull & Fix self-test passed. All 22 isolated UI scenarios passed, including worktree-protected branches displaying with no Clean/Clean all action. Captured `docs/screenshots/worktree-protection.png`. No real repo cleanup was executed during testing.

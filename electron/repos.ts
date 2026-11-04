@@ -201,8 +201,12 @@ export async function scan(
   const primary = await primaryBranch(repo);
   if (!primary) return s;
   s.primary = primary;
-  const [lrc, locals] = await git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/");
-  if (lrc === 0) s.cleanupBranches = lines(locals).filter((b) => b !== primary);
+  const plan = await cleanupPlan(repo, primary);
+  if (plan) {
+    s.cleanupBranches = plan.candidates;
+    s.protectedCleanupBranches = plan.protected;
+    s.cleanupPrimaryElsewhere = plan.primaryElsewhere;
+  } else s.error = "Could not inspect local branch worktrees";
 
   let openMRs = new Set<string>();
   if (opts.showRemoteBranches) {
@@ -477,6 +481,31 @@ async function heldByOtherWorktree(repo: string, branch: string): Promise<boolea
   return realpathSafe(wt) !== realpathSafe(repo);
 }
 
+/** Branch ownership is shared by all linked worktrees. Never move another worktree. */
+async function cleanupPlan(repo: string, primary: string): Promise<{
+  candidates: string[]; protected: string[]; primaryElsewhere: boolean;
+} | null> {
+  const [rc, out] = await git(repo, "for-each-ref", "--format=%(refname:short)%09%(worktreepath)", "refs/heads/");
+  if (rc !== 0) return null;
+  const heads = lines(out).map(line => {
+    const tab = line.indexOf("\t");
+    return {name: tab < 0 ? line : line.slice(0,tab), worktree: tab < 0 ? "" : line.slice(tab+1)};
+  });
+  const here = realpathSafe(repo);
+  const owner = heads.find(head => head.name === primary)?.worktree;
+  const primaryElsewhere = Boolean(owner && realpathSafe(owner) !== here);
+  const candidates: string[] = [];
+  const protectedBranches: string[] = [];
+  for (const head of heads) {
+    if (head.name === primary) continue;
+    // The current non-primary branch can be cleaned after switching to primary,
+    // but only if primary is available in this worktree.
+    if (head.worktree && (realpathSafe(head.worktree) !== here || primaryElsewhere)) protectedBranches.push(head.name);
+    else candidates.push(head.name);
+  }
+  return {candidates, protected:protectedBranches, primaryElsewhere};
+}
+
 function blockedByLocalChanges(out: string): boolean {
   const low = out.toLowerCase();
   return ["overwritten", "local changes", "uncommitted", "stash"].some((n) => low.includes(n));
@@ -569,47 +598,46 @@ export async function pullAndFix(s: RepoStatus): Promise<string | null> {
   return err === null ? null : (lastLine(err) || "pull failed").slice(0, 160);
 }
 
-/**
- * Checks out the primary branch, deletes every other local branch, then pulls.
- * Re-reads heads at clean time so a stale panel list cannot fail on already-gone branches.
- */
+/** Deletes confirmed unused branches, retaining every branch owned by another worktree. */
 export async function clean(s: RepoStatus): Promise<string | null> {
   const primary = s.primary ?? (await primaryBranch(s.path));
   if (!primary) return "no main/master";
-  if (await heldByOtherWorktree(s.path, primary)) {
-    return `${primary} is checked out in another worktree`;
-  }
-  const blocked = await clearIndexBlockers(s.path);
-  if (blocked) return blocked;
-  let [crc, cout] = await git(s.path, "checkout", primary);
-  if (crc !== 0 && blockedByLocalChanges(cout)) {
-    const { error: stashErr } = await stashPush(s.path, "Repoes Sweep before clean");
-    if (stashErr) return stashErr;
-    [crc, cout] = await git(s.path, "checkout", primary);
-  }
-  if (crc !== 0) return `checkout ${primary}: ${cout.slice(0, 120)}`;
+  let plan = await cleanupPlan(s.path, primary);
+  if (!plan) return "could not inspect local branch worktrees";
+  const confirmed = new Set(s.cleanupBranches);
+  // A queued request may become stale after another worktree cleans shared refs.
+  if (!plan.candidates.some(branch => confirmed.has(branch))) return null;
 
-  const [lrc, locals] = await git(s.path, "for-each-ref", "--format=%(refname:short)", "refs/heads/");
-  const branches = (lrc === 0 ? lines(locals) : s.cleanupBranches).filter(
-    (b) => b && b !== primary,
-  );
-
-  const failed: string[] = [];
-  for (const b of branches) {
-    if (await heldByOtherWorktree(s.path, b)) {
-      failed.push(`${b} (other worktree)`);
-      continue;
+  const usingPrimaryHere = !plan.primaryElsewhere;
+  if (usingPrimaryHere) {
+    const blocked = await clearIndexBlockers(s.path);
+    if (blocked) return blocked;
+    let [rc, out] = await git(s.path, "checkout", primary);
+    if (rc !== 0 && blockedByLocalChanges(out)) {
+      const {error} = await stashPush(s.path, "Repoes Sweep before clean");
+      if (error) return error;
+      [rc, out] = await git(s.path, "checkout", primary);
     }
-    const [rc, out] = await git(s.path, "branch", "-D", "--", b);
+    if (rc !== 0) return `checkout ${primary}: ${out.slice(0,120)}`;
+  }
+  // Refresh ownership after checkout; never expand the user's confirmed branch list.
+  plan = await cleanupPlan(s.path, primary);
+  if (!plan) return "could not recheck local branch worktrees";
+  const failed: string[] = [];
+  for (const branch of plan.candidates.filter(branch => confirmed.has(branch))) {
+    const [rc,out] = await git(s.path, "branch", "-D", "--", branch);
     if (rc === 0) continue;
     const low = out.toLowerCase();
-    if (low.includes("not found") || low.includes("doesn't exist") || low.includes("does not exist")) {
-      continue;
-    }
-    failed.push(`${b}: ${firstLine(out).slice(0, 80)}`);
+    // A concurrent worktree may claim or remove the ref after the ownership check.
+    if (["not found", "doesn't exist", "does not exist", "used by worktree", "checked out at"].some(text => low.includes(text))) continue;
+    failed.push(`${branch}: ${firstLine(out).slice(0,80)}`);
   }
-  await git(s.path, "pull", "--ff-only");
-  return failed.length ? `couldn't delete: ${failed.join("; ")}` : null;
+  // In a linked worktree, stay on its current branch and leave the primary owner alone.
+  if (usingPrimaryHere) {
+    const [rc,out] = await git(s.path, "pull", "--ff-only");
+    if (rc !== 0) failed.push(`pull failed: ${lastLine(out).slice(0,120)}`);
+  }
+  return failed.length ? failed.join("; ") : null;
 }
 
 /** Deletes origin/<branch> on the remote. Refuses the primary branch and names not on origin. */

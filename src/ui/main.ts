@@ -286,7 +286,7 @@ async function handleAction(act: string, el: HTMLElement): Promise<void> {
       const primary = repo.primary ?? "the primary branch";
       const ok = await askConfirm({
         title: `Clean ${repo.name}?`,
-        message: `Checks out ${primary}, force-deletes ${plural(repo.cleanupBranches.length, "local branch", "local branches")} (${repo.cleanupBranches.join(", ")}) with git branch -D, then pulls. Unmerged commits on those branches are lost. Nothing on the remote changes.`,
+        message: `${repo.cleanupPrimaryElsewhere ? "Keeps this worktree on its current branch and leaves the primary worktree unchanged." : `Checks out ${primary}, then pulls after cleanup.`} Force-deletes ${plural(repo.cleanupBranches.length, "local branch", "local branches")} (${repo.cleanupBranches.join(", ")}) with git branch -D. Unmerged commits on those branches are lost. Branches in use by worktrees are kept. Nothing on the remote changes.`,
         confirmLabel: "Clean",
         danger: true,
       });
@@ -298,7 +298,7 @@ async function handleAction(act: string, el: HTMLElement): Promise<void> {
       const total = list.reduce((n, r) => n + r.cleanupBranches.length, 0);
       const ok = await askConfirm({
         title: `Clean ${plural(list.length, "repo")}?`,
-        message: `Checks out the primary branch in each repo and force-deletes ${plural(total, "local branch", "local branches")} with git branch -D, then pulls. Unmerged commits on those branches are lost. Nothing on the remote changes.`,
+        message: `Uses the primary branch where available and leaves linked worktrees in place. Force-deletes ${plural(total, "local branch", "local branches")} with git branch -D. Unmerged commits on those branches are lost. Branches in use by worktrees are kept. Pulls only where the primary branch is available. Nothing on the remote changes.`,
         confirmLabel: "Clean all",
         danger: true,
       });
@@ -373,7 +373,7 @@ function renderOverview(s: PanelState): string {
     const update = repo.behind > 0 || repo.gone;
     const local = repo.cleanupBranches.length > 0;
     const remote = s.prefs.showRemoteBranches && listed(repo,s.prefs).length > 0;
-    return repoFilter === "updates" ? update : repoFilter === "cleanup" ? local : repoFilter === "remote" ? remote : update || local || remote || Boolean(repo.error);
+    return repoFilter === "updates" ? update : repoFilter === "cleanup" ? local : repoFilter === "remote" ? remote : update || local || remote || Boolean(repo.error) || Boolean(repo.protectedCleanupBranches?.length);
   });
   const cards = repos.map(repo => {
     const path = escapeHtml(repo.path);
@@ -382,6 +382,7 @@ function renderOverview(s: PanelState): string {
     const status = repo.error ? "Scan error" : repo.gone ? "Remote branch gone" : repo.behind ? `${repo.behind} behind` : "Up to date";
     const tone = repo.error || repo.gone ? "bad" : repo.behind ? "warn" : s.prefs.greenForPassing ? "ok" : "muted";
     const tasks: string[] = [];
+    if (repo.protectedCleanupBranches?.length && (repoFilter === "all" || repoFilter === "cleanup")) tasks.push(`<div class="worktree-note">Kept for worktrees: ${escapeHtml(repo.protectedCleanupBranches.join(", "))}</div>`);
     if (repo.error) tasks.push(`<div class="repo-error" role="status">${escapeHtml(repo.error)}</div>`);
     if (update && (repoFilter === "all" || repoFilter === "updates")) tasks.push(`<div class="work-task"><span class="task-icon tone-warn">${ICONS.outdated}</span><span class="task-description">${repo.gone ? "Remote branch gone" : `Behind ${plural(repo.behind,"commit")}`}</span><div class="task-actions">${!repo.gone ? `<button class="inline primary" data-act="pull" data-path="${path}">Pull</button>` : ""}<button class="inline" data-act="pullFix" data-path="${path}">Pull &amp; Fix</button></div></div>`);
     if (repo.cleanupBranches.length && (repoFilter === "all" || repoFilter === "cleanup")) tasks.push(`<div class="work-task"><span class="task-icon tone-warn">${ICONS.cleanup}</span><span class="task-description"><span class="task-label">Local ${repo.cleanupBranches.length === 1 ? "branch" : "branches"}:</span> ${escapeHtml(repo.cleanupBranches.join(", "))}</span><div class="task-actions"><button class="inline" data-act="clean" data-path="${path}">Clean</button></div></div>`);
@@ -392,7 +393,7 @@ function renderOverview(s: PanelState): string {
     }
     return `<article class="repo-work-card" data-repo-path="${path}"><button class="repo-work-head" data-act="toggleRepo" data-path="${path}" aria-expanded="${open}"><span class="repo-glyph">${repoIcon}</span><span class="repo-identity"><strong>${escapeHtml(repo.name)}</strong><span>${ICONS.remote}${escapeHtml(repo.branch || "Detached HEAD")}${repo.dirtyCount ? ` · ${plural(repo.dirtyCount,"local change")}` : ""}</span></span><span class="repo-status tone-${tone}">${status}</span><span class="chev ${open ? "up" : ""}" aria-hidden="true"></span></button>${open ? `<div class="repo-work-body">${tasks.join("")}</div>` : ""}</article>`;
   }).join("");
-  return banner + tabs + bulk + (cards || empty(!s.updated ? s.scanning ? "Scanning clones…" : "No scan yet" : repoFilter === "all" ? "All repos are up to date. No cleanup or remote branches to review." : `No ${repoFilter === "updates" ? "out-of-date repos" : repoFilter === "cleanup" ? "local branches to clean" : "remote branches to review"}.`));
+  return banner + tabs + bulk + (cards || empty(!s.updated ? s.scanning ? "Scanning clones…" : "No scan yet" : repoFilter === "all" ? "All repos are up to date. No cleanup or remote branches to review." : `No ${repoFilter === "updates" ? "out-of-date repos" : repoFilter === "cleanup" ? "local branches to clean (branches in use by worktrees are kept)" : "remote branches to review"}.`));
 }
 
 function toggleHtml(key: keyof Prefs, label: string, on: boolean, nested = false): string {

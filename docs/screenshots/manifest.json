@@ -174,5 +174,13 @@
       "width": 880,
       "height": 880
     }
+  },
+  {
+    "file": "worktree-protection.png",
+    "caption": "Branches in use by linked worktrees are retained and excluded from cleanup.",
+    "size": {
+      "width": 880,
+      "height": 482
+    }
   }
 ]
