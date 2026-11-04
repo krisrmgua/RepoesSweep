@@ -125,12 +125,13 @@ A clone is listed when the current branch is behind its upstream, or when the up
 
 - **Pull** runs `git pull --ff-only`, then a plain `git pull` if fast-forward is rejected.
 - **Pull & Fix** tries to get past the usual blocks:
+  - unfinished merge/rebase/cherry-pick/revert, or a stuck conflicted index: abort it (`merge --abort` / `rebase --abort` / …, or `reset --merge` when `MERGE_HEAD` is already gone) so stash and pull can run
   - upstream gone: check out the primary branch (`main` or `master`, or `origin/HEAD`) and pull
   - local edits in the way: stash them, including untracked files, pull, then pop the stash
   - local and remote diverged: `git pull --rebase`
 - **Pull all** queues one pull per listed clone. **Pull & Fix all** asks first, then queues one job per listed clone.
 
-A stash created here is labeled `Repoes Sweep auto-stash` or `Repoes Sweep before checkout primary`. If the pop conflicts, the changes stay in `git stash` and the panel says so.
+A stash created here is labeled `Repoes Sweep auto-stash` or `Repoes Sweep before checkout primary`. If the pop conflicts, the changes stay in `git stash` and the panel says so. Aborting a conflicted merge discards that unfinished merge; ordinary unstaged edits are kept when git can.
 
 ### Cleanup
 
