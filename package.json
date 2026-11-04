@@ -1,7 +1,7 @@
 {
   "name": "repoes-sweep",
   "productName": "Repoes Sweep",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Tray app that keeps your git clones caught up, for macOS and Windows",
   "main": "dist-electron/main.js",
   "author": "Kristopher Simmons",

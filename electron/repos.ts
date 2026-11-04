@@ -280,7 +280,7 @@ export async function pull(repo: string): Promise<string | null> {
   return err === null ? null : err.slice(0, 160);
 }
 
-type FixId = "checkoutPrimaryPull" | "stashPullPop" | "pullRebase";
+type FixId = "checkoutPrimaryPull" | "stashPullPop" | "pullRebase" | "clearBlockers";
 
 const FAILURE_PATTERNS: { needles: string[]; summary: string; fix: FixId | null }[] = [
   {
@@ -293,6 +293,8 @@ const FAILURE_PATTERNS: { needles: string[]; summary: string; fix: FixId | null 
       "would be overwritten by merge",
       "please commit your changes or stash",
       "local changes to the following files",
+      "your local changes to the following files would be overwritten",
+      "untracked working tree files would be overwritten",
     ],
     summary: "Local changes block pull",
     fix: "stashPullPop",
@@ -302,9 +304,26 @@ const FAILURE_PATTERNS: { needles: string[]; summary: string; fix: FixId | null 
       "not possible to fast-forward",
       "need to specify how to reconcile",
       "divergent branches",
+      "cannot fast-forward",
     ],
     summary: "Local and remote diverged",
     fix: "pullRebase",
+  },
+  {
+    needles: [
+      "needs merge",
+      "unmerged paths",
+      "you need to resolve your current index first",
+      "fix conflicts",
+      "merge conflict",
+      "unmerged files",
+      "you are in the middle of a merge",
+      "rebase in progress",
+      "you must edit all merge conflicts",
+      "could not write index",
+    ],
+    summary: "Unresolved merge / rebase",
+    fix: "clearBlockers",
   },
   {
     needles: ["permission denied", "authentication failed", "could not read from remote", "publickey"],
@@ -320,6 +339,124 @@ function classify(text: string): FixId | null | undefined {
     if (p.needles.some((n) => low.includes(n))) return p.fix;
   }
   return undefined;
+}
+
+async function gitPathExists(repo: string, name: string): Promise<boolean> {
+  const [rc, p] = await git(repo, "rev-parse", "--git-path", name);
+  if (rc !== 0 || !p) return false;
+  const abs = path.isAbsolute(p) ? p : path.join(repo, p);
+  try {
+    await fsp.access(abs);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function hasUnmergedPaths(repo: string): Promise<boolean> {
+  const [rc, out] = await git(repo, "ls-files", "-u");
+  return rc === 0 && out.length > 0;
+}
+
+/**
+ * Clears unfinished merge/rebase/cherry-pick/revert (and leftover unmerged
+ * index entries) so stash and pull can run. Preserves ordinary dirty files
+ * when git can (`merge --abort` / `reset --merge`).
+ */
+export async function clearIndexBlockers(repo: string): Promise<string | null> {
+  const steps: { when: () => Promise<boolean>; args: string[]; label: string }[] = [
+    {
+      when: async () => gitPathExists(repo, "CHERRY_PICK_HEAD"),
+      args: ["cherry-pick", "--abort"],
+      label: "cherry-pick --abort",
+    },
+    {
+      when: async () => gitPathExists(repo, "REVERT_HEAD"),
+      args: ["revert", "--abort"],
+      label: "revert --abort",
+    },
+    {
+      when: async () =>
+        (await gitPathExists(repo, "rebase-merge")) ||
+        (await gitPathExists(repo, "rebase-apply")) ||
+        (await gitPathExists(repo, "REBASE_HEAD")),
+      args: ["rebase", "--abort"],
+      label: "rebase --abort",
+    },
+    {
+      when: async () =>
+        (await gitPathExists(repo, "MERGE_HEAD")) || (await gitPathExists(repo, "MERGE_MODE")),
+      args: ["merge", "--abort"],
+      label: "merge --abort",
+    },
+  ];
+
+  for (const step of steps) {
+    if (!(await step.when())) continue;
+    const [rc, out] = await git(repo, ...step.args);
+    if (rc !== 0) {
+      const low = out.toLowerCase();
+      if (!low.includes("no ") && !low.includes("not currently")) {
+        return `${step.label} failed: ${out.slice(0, 120)}`;
+      }
+    }
+  }
+
+  // Stuck UU index without MERGE_HEAD (e.g. AUTO_MERGE left behind).
+  if (await hasUnmergedPaths(repo)) {
+    const [rc, out] = await git(repo, "reset", "--merge");
+    if (rc !== 0) {
+      return `reset --merge failed: ${out.slice(0, 120)}`;
+    }
+  }
+
+  if (await hasUnmergedPaths(repo)) {
+    return "still has unmerged paths after abort";
+  }
+  return null;
+}
+
+/**
+ * Stash push that treats "nothing to save" as success and surfaces real errors.
+ * Returns null on success (including empty), or an error string.
+ */
+async function stashPush(
+  repo: string,
+  message: string,
+): Promise<{ error: string | null; stashed: boolean }> {
+  const tryPush = async (withUntracked: boolean): Promise<[number, string]> =>
+    withUntracked
+      ? git(repo, "stash", "push", "-u", "-m", message)
+      : git(repo, "stash", "push", "-m", message);
+
+  let [rc, out] = await tryPush(true);
+  if (rc === 0) return { error: null, stashed: true };
+  let low = out.toLowerCase();
+  if (low.includes("no local changes")) return { error: null, stashed: false };
+
+  if (
+    low.includes("needs merge") ||
+    low.includes("unmerged") ||
+    low.includes("could not write index")
+  ) {
+    const cleared = await clearIndexBlockers(repo);
+    if (cleared) return { error: cleared, stashed: false };
+    [rc, out] = await tryPush(true);
+    if (rc === 0) return { error: null, stashed: true };
+    low = out.toLowerCase();
+    if (low.includes("no local changes")) return { error: null, stashed: false };
+  }
+
+  // Tracked-only fallback when -u fails (e.g. stubborn untracked).
+  [rc, out] = await tryPush(false);
+  if (rc === 0) return { error: null, stashed: true };
+  if (out.toLowerCase().includes("no local changes")) {
+    return { error: null, stashed: false };
+  }
+  return {
+    error: `stash failed: ${(lastLine(out) || out).slice(0, 140)}`,
+    stashed: false,
+  };
 }
 
 function realpathSafe(p: string): string {
@@ -352,9 +489,15 @@ async function checkoutPrimaryPull(s: RepoStatus): Promise<string | null> {
   if (await heldByOtherWorktree(s.path, primary)) {
     return `${primary} is checked out in another worktree; pull it there`;
   }
+  const blocked = await clearIndexBlockers(s.path);
+  if (blocked) return blocked;
   let [rc, out] = await git(s.path, "checkout", primary);
   if (rc !== 0 && blockedByLocalChanges(out)) {
-    await git(s.path, "stash", "push", "-u", "-m", "Repoes Sweep before checkout primary");
+    const { error: stashErr } = await stashPush(
+      s.path,
+      "Repoes Sweep before checkout primary",
+    );
+    if (stashErr) return stashErr;
     [rc, out] = await git(s.path, "checkout", primary);
   }
   if (rc !== 0) return `checkout ${primary} failed: ${out.slice(0, 120)}`;
@@ -363,18 +506,25 @@ async function checkoutPrimaryPull(s: RepoStatus): Promise<string | null> {
 }
 
 async function pullRebase(repo: string): Promise<string | null> {
+  const blocked = await clearIndexBlockers(repo);
+  if (blocked) return blocked;
   const [rc, out] = await git(repo, "pull", "--rebase");
   return rc === 0 ? null : (lastLine(out) || "pull --rebase failed").slice(0, 160);
 }
 
 /** Stashes local changes (including untracked), pulls, then pops. A conflicting pop leaves them in the stash. */
 async function pullStashed(repo: string): Promise<string | null> {
+  const blocked = await clearIndexBlockers(repo);
+  if (blocked) return blocked;
   const dirty = (await git(repo, "status", "--porcelain"))[1].length > 0;
-  if (dirty && (await git(repo, "stash", "push", "-u", "-m", "Repoes Sweep auto-stash"))[0] !== 0) {
-    return "stash failed";
+  let didStash = false;
+  if (dirty) {
+    const { error: stashErr, stashed } = await stashPush(repo, "Repoes Sweep auto-stash");
+    if (stashErr) return stashErr;
+    didStash = stashed;
   }
   const err = await pull(repo);
-  if (dirty) {
+  if (didStash) {
     const [rc, out] = await git(repo, "stash", "pop");
     if (rc !== 0) {
       return `stash pop needs attention (changes are in git stash): ${out.slice(0, 120)}`;
@@ -384,24 +534,39 @@ async function pullStashed(repo: string): Promise<string | null> {
 }
 
 /**
- * Pull & Fix: gone upstream -> checkout primary; local changes -> stash, pull, pop;
- * diverged -> pull --rebase. Anything else is reported as-is.
+ * Pull & Fix: clear unfinished merge/rebase, then gone upstream -> primary;
+ * local changes -> stash/pull/pop; diverged -> rebase. Retries a few times
+ * when git's error text maps to a known fix.
  */
 export async function pullAndFix(s: RepoStatus): Promise<string | null> {
+  const cleared = await clearIndexBlockers(s.path);
+  if (cleared) return cleared;
+
   if (s.gone) return checkoutPrimaryPull(s);
-  if (s.dirtyCount > 0) return pullStashed(s.path);
-  const err = await pullRaw(s.path);
-  if (err === null) return null;
-  switch (classify(err)) {
-    case "stashPullPop":
-      return pullStashed(s.path);
-    case "pullRebase":
-      return pullRebase(s.path);
-    case "checkoutPrimaryPull":
-      return checkoutPrimaryPull(s);
-    default:
-      return (lastLine(err) || "pull failed").slice(0, 160);
+
+  const dirtyNow = (await git(s.path, "status", "--porcelain"))[1].length > 0;
+  if (dirtyNow || s.dirtyCount > 0) return pullStashed(s.path);
+
+  let err = await pullRaw(s.path);
+  for (let attempt = 0; attempt < 3 && err; attempt++) {
+    switch (classify(err)) {
+      case "clearBlockers": {
+        const c = await clearIndexBlockers(s.path);
+        if (c) return c;
+        err = await pullRaw(s.path);
+        continue;
+      }
+      case "stashPullPop":
+        return pullStashed(s.path);
+      case "pullRebase":
+        return pullRebase(s.path);
+      case "checkoutPrimaryPull":
+        return checkoutPrimaryPull(s);
+      default:
+        return (lastLine(err) || "pull failed").slice(0, 160);
+    }
   }
+  return err === null ? null : (lastLine(err) || "pull failed").slice(0, 160);
 }
 
 /**
@@ -414,9 +579,12 @@ export async function clean(s: RepoStatus): Promise<string | null> {
   if (await heldByOtherWorktree(s.path, primary)) {
     return `${primary} is checked out in another worktree`;
   }
+  const blocked = await clearIndexBlockers(s.path);
+  if (blocked) return blocked;
   let [crc, cout] = await git(s.path, "checkout", primary);
   if (crc !== 0 && blockedByLocalChanges(cout)) {
-    await git(s.path, "stash", "push", "-u", "-m", "Repoes Sweep before clean");
+    const { error: stashErr } = await stashPush(s.path, "Repoes Sweep before clean");
+    if (stashErr) return stashErr;
     [crc, cout] = await git(s.path, "checkout", primary);
   }
   if (crc !== 0) return `checkout ${primary}: ${cout.slice(0, 120)}`;

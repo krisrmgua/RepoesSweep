@@ -255,7 +255,7 @@ async function handleAction(act: string, el: HTMLElement): Promise<void> {
       const ok = await askConfirm({
         title: `Pull & Fix ${plural(list.length, "repo")}?`,
         message:
-          "Each repo is pulled, and when a pull is blocked it may stash local edits (popped after), check out the primary branch, or run git pull --rebase.",
+          "Each repo is pulled. Blockers are cleared first (unfinished merge/rebase), then it may stash local edits (popped after), check out the primary branch, or run git pull --rebase.",
         confirmLabel: "Pull & Fix all",
         danger: false,
       });
