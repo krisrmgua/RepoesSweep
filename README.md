@@ -25,7 +25,13 @@ Screenshots of the current Electron interface on macOS, using fictional projects
 
 <a href="docs/screenshots/overview.png"><img src="docs/screenshots/overview.png" alt="RepoesSweep main view with sample data" width="460" /></a>
 
-The gallery includes detail views, settings, and available actions. Click an image for the full-resolution capture.
+The repo workbench groups updates, local cleanup, and remote branches in each repository card. Use All, Updates, Cleanup, or Remote to focus the list. Successful operations show a green completion banner; failures and running operations have distinct banners.
+
+<a href="docs/screenshots/updates-filter.png"><img src="docs/screenshots/updates-filter.png" alt="Repo workbench filtered to out-of-date clones" width="360" /></a>
+<a href="docs/screenshots/cleanup-filter.png"><img src="docs/screenshots/cleanup-filter.png" alt="Repo workbench filtered to local cleanup" width="360" /></a>
+<a href="docs/screenshots/remote-filter.png"><img src="docs/screenshots/remote-filter.png" alt="Repo workbench filtered to remote branches" width="360" /></a>
+
+The gallery includes detail views, settings, and confirmations. Click an image for the full-resolution capture.
 
 <details>
 <summary>View dashboard screenshots</summary>

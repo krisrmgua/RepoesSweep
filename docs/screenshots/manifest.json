@@ -12,7 +12,7 @@
     "caption": "Out-of-date clones, cleanup candidates, and remote branches.",
     "size": {
       "width": 880,
-      "height": 1352
+      "height": 1246
     }
   },
   {
@@ -20,7 +20,7 @@
     "caption": "Remote branch states, MR badges, and per-branch or bulk actions.",
     "size": {
       "width": 880,
-      "height": 1352
+      "height": 838
     }
   },
   {
@@ -28,7 +28,7 @@
     "caption": "Pull & Fix explains the recovery steps before applying them.",
     "size": {
       "width": 880,
-      "height": 1352
+      "height": 1246
     }
   },
   {
@@ -36,7 +36,7 @@
     "caption": "Local cleanup confirmation names the branches and describes its effect.",
     "size": {
       "width": 880,
-      "height": 1352
+      "height": 1246
     }
   },
   {
@@ -44,7 +44,7 @@
     "caption": "Remote deletion has a separate confirmation.",
     "size": {
       "width": 880,
-      "height": 1352
+      "height": 1246
     }
   },
   {
@@ -53,6 +53,126 @@
     "size": {
       "width": 880,
       "height": 1044
+    }
+  },
+  {
+    "file": "updates-filter.png",
+    "caption": "Updates filter shows only out-of-date repositories.",
+    "size": {
+      "width": 880,
+      "height": 838
+    }
+  },
+  {
+    "file": "cleanup-filter.png",
+    "caption": "Cleanup filter shows local branches and repository-scoped Clean actions.",
+    "size": {
+      "width": 880,
+      "height": 838
+    }
+  },
+  {
+    "file": "remote-filter.png",
+    "caption": "Remote filter shows merge state, MR badges, and deletion actions.",
+    "size": {
+      "width": 880,
+      "height": 838
+    }
+  },
+  {
+    "file": "delete-branch-confirmation.png",
+    "caption": "Remote deletion confirms the exact repo and branch.",
+    "size": {
+      "width": 880,
+      "height": 838
+    }
+  },
+  {
+    "file": "delete-cancel.png",
+    "caption": "Cancelling deletion does not invoke the backend.",
+    "size": {
+      "width": 880,
+      "height": 838
+    }
+  },
+  {
+    "file": "delete-submitted.png",
+    "caption": "Confirmed deletion sends only the chosen branch.",
+    "size": {
+      "width": 880,
+      "height": 838
+    }
+  },
+  {
+    "file": "repo-collapsed.png",
+    "caption": "Repository cards collapse without changing other cards.",
+    "size": {
+      "width": 880,
+      "height": 1036
+    }
+  },
+  {
+    "file": "repo-expanded.png",
+    "caption": "Expanding restores the repository tasks.",
+    "size": {
+      "width": 880,
+      "height": 1246
+    }
+  },
+  {
+    "file": "pull-submitted.png",
+    "caption": "Pull targets only the selected repository.",
+    "size": {
+      "width": 880,
+      "height": 1246
+    }
+  },
+  {
+    "file": "failure-banner.png",
+    "caption": "Failed operations use an error banner.",
+    "size": {
+      "width": 880,
+      "height": 1246
+    }
+  },
+  {
+    "file": "working-banner.png",
+    "caption": "Active operations use a working banner.",
+    "size": {
+      "width": 880,
+      "height": 1246
+    }
+  },
+  {
+    "file": "empty-overview.png",
+    "caption": "A completed scan without tasks has a clear empty state.",
+    "size": {
+      "width": 880,
+      "height": 368
+    }
+  },
+  {
+    "file": "remote-hidden.png",
+    "caption": "Remote visibility preference also removes remote filters and actions.",
+    "size": {
+      "width": 880,
+      "height": 1018
+    }
+  },
+  {
+    "file": "gone-branch.png",
+    "caption": "Missing upstream branches offer Pull & Fix without a plain Pull.",
+    "size": {
+      "width": 880,
+      "height": 630
+    }
+  },
+  {
+    "file": "short-panel.png",
+    "caption": "Long workbench lists scroll while the footer stays visible.",
+    "size": {
+      "width": 880,
+      "height": 880
     }
   }
 ]
