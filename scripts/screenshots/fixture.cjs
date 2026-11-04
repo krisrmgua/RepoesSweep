@@ -85,7 +85,7 @@ module.exports = {
     "result": "Done: Pull atlas-web",
     "root": "/Users/demo/projects",
     "platform": "darwin",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "mark": image('assets/mark/RepoesSweepMark.png')
   },
   "shots": [
@@ -153,3 +153,5 @@ module.exports.shots.push(
 );
 
 module.exports.shots.push({name:'short-panel',caption:'Long workbench lists scroll while the footer stays visible.',height:440,patch:{repos:structuredClone(module.exports.state.repos),prefs:structuredClone(module.exports.state.prefs)},check:'document.querySelector("main").scrollHeight>document.querySelector("main").clientHeight && document.querySelector(".foot").getBoundingClientRect().bottom<=innerHeight && document.documentElement.scrollWidth<=innerWidth'});
+
+module.exports.shots.push({name:'worktree-protection',caption:'Branches in use by linked worktrees are retained and excluded from cleanup.',height:720,patch:{repos:[{...module.exports.state.repos[0],behind:0,cleanupBranches:[],remoteBranches:[],protectedCleanupBranches:['feature/in-use'],cleanupPrimaryElsewhere:true}],prefs:structuredClone(module.exports.state.prefs),result:null},expect:'Kept for worktrees: feature/in-use',check:'!document.querySelector("[data-act=clean]") && !document.querySelector("[data-act=cleanAll]")'});

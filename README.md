@@ -19,6 +19,8 @@ The labeled sheets enlarge the app’s actual rendered artwork 2× for detail. T
 
 [Full menu-bar gallery and regeneration instructions](docs/menu-bar.md)
 
+Local cleanup respects linked Git worktrees: branches in use are retained and excluded from Clean. If the primary branch belongs to another worktree, unused branches can be cleaned without switching or pulling either worktree. The confirmation lists the branches that may be deleted.
+
 ## Screenshots
 
 Screenshots of the current Electron interface on macOS, using fictional projects, accounts, jobs, and values. No personal data or live credentials are used.
@@ -279,3 +281,7 @@ The shipping version is `package.json` → `version` (currently **0.2.0**). The 
 ## Contributing
 
 Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md). `main` only accepts changes through a pull request.
+
+### Cleanup regression checks
+
+Run `npm run build:electron` followed by `node scripts/worktree-clean-selftest.mjs`. The tests use temporary repos and a local bare remote to verify worktree ownership, preserved edits, stale requests, confirmation scope, normal cleanup, and pull-error reporting.
