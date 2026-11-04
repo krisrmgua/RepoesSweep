@@ -8,6 +8,34 @@ Git has to already work in a terminal for those clones. The app does not install
 
 > **Electron is the cross-platform app.** It lives at the repo root (`electron/`, `src/ui/`, `scripts/`). The original Swift menu-bar app is still in `menubar/` and still builds, but new work goes into the Electron app. The Swift copy will be removed once the Electron build has fully replaced it.
 
+
+## Screenshots
+
+Screenshots of the current Electron interface on macOS, using fictional projects, accounts, jobs, and values. No personal data or live credentials are used.
+
+<a href="docs/screenshots/overview.png"><img src="docs/screenshots/overview.png" alt="RepoesSweep main view with sample data" width="460" /></a>
+
+The gallery includes detail views, settings, and available actions. Click an image for the full-resolution capture.
+
+<details>
+<summary>View all 6 screenshots</summary>
+
+| Overview | Remote Branches |
+| --- | --- |
+| <a href="docs/screenshots/overview.png"><img src="docs/screenshots/overview.png" alt="Out-of-date clones, cleanup candidates, and remote branches." width="360" /></a><br>Out-of-date clones, cleanup candidates, and remote branches. | <a href="docs/screenshots/remote-branches.png"><img src="docs/screenshots/remote-branches.png" alt="Remote branch states, MR badges, and per-branch or bulk actions." width="360" /></a><br>Remote branch states, MR badges, and per-branch or bulk actions. |
+
+| Pull Fix Confirmation | Cleanup Confirmation |
+| --- | --- |
+| <a href="docs/screenshots/pull-fix-confirmation.png"><img src="docs/screenshots/pull-fix-confirmation.png" alt="Pull &amp; Fix explains the recovery steps before applying them." width="360" /></a><br>Pull & Fix explains the recovery steps before applying them. | <a href="docs/screenshots/cleanup-confirmation.png"><img src="docs/screenshots/cleanup-confirmation.png" alt="Local cleanup confirmation names the branches and describes its effect." width="360" /></a><br>Local cleanup confirmation names the branches and describes its effect. |
+
+| Remote Delete Confirmation | Settings |
+| --- | --- |
+| <a href="docs/screenshots/remote-delete-confirmation.png"><img src="docs/screenshots/remote-delete-confirmation.png" alt="Remote deletion has a separate confirmation." width="360" /></a><br>Remote deletion has a separate confirmation. | <a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="All preferences and scan interval choices." width="360" /></a><br>All preferences and scan interval choices. |
+
+</details>
+
+[How these screenshots are made](docs/screenshots/README.md)
+
 ---
 
 ## Requirements
