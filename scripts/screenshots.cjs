@@ -36,6 +36,10 @@ app.whenReady().then(async () => {
   win.webContents.send('capture:update', { mark: require('../dist-electron/trayIcon.js').headerMarkDataUrl(false) });
   await pause(500);
   const manifest = [];
+  const menu = await require('./screenshots/menu.cjs')(root, output);
+  const menuItems = Array.isArray(menu) ? menu : [menu];
+  manifest.push(...menuItems);
+  fs.writeFileSync(path.join(output,'menu-manifest.json'),JSON.stringify(menuItems,null,2)+'\n');
   for (const shot of fixture.shots) {
     if (shot.patch) { win.webContents.send('capture:update', shot.patch); await pause(100); }
     if (shot.action) await win.webContents.executeJavaScript(shot.action);
