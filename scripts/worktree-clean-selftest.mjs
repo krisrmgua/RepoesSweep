@@ -56,4 +56,32 @@ try {
   git(standalone,'branch','needs-clean');const failing=await inspect(standalone);git(standalone,'remote','set-url','origin',path.join(root,'missing.git'));
   assert.match(await clean(failing),/pull failed:/);
   console.log('PASS: pull failures are reported instead of a false success');
+
+  const detachedLink=path.join(root,'detached-link');
+  git(primary,'worktree','add','--detach',detachedLink);
+  const detached=await inspect(detachedLink);
+  assert.equal(detached.error,'detached HEAD');
+  assert.equal(detached.linkedWorktree,true);
+  assert.equal(await clean(detached),null);
+  assert.equal(fs.existsSync(detachedLink),false);
+  assert.equal(git(primary,'worktree','list').includes('detached-link'),false);
+  console.log('PASS: clean removes a detached linked worktree');
+
+  const dirtyLink=path.join(root,'dirty-link');
+  git(primary,'worktree','add','--detach',dirtyLink);
+  fs.writeFileSync(path.join(dirtyLink,'local.txt'),'keep\n');
+  const dirty=await inspect(dirtyLink);
+  assert.match(await clean(dirty),/modified or untracked|uncommitted/i);
+  assert.equal(fs.existsSync(path.join(dirtyLink,'local.txt')),true);
+  console.log('PASS: clean refuses a dirty detached worktree');
+
+  const loose=path.join(root,'loose');
+  git(root,'clone',remote,loose);
+  git(loose,'checkout','--detach');
+  const looseStatus=await inspect(loose);
+  assert.equal(looseStatus.error,'detached HEAD');
+  assert.equal(looseStatus.linkedWorktree,false);
+  assert.equal(await clean(looseStatus),null);
+  assert.equal(git(loose,'branch','--show-current'),'main');
+  console.log('PASS: clean checks out primary on a detached normal clone');
 } finally {fs.rmSync(root,{recursive:true,force:true});}

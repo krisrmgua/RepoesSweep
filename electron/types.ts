@@ -30,6 +30,8 @@ export interface RepoStatus {
   /** No commits exist yet; not an actionable scan error. */
   empty?: boolean;
   error?: string;
+  /** This checkout is a linked worktree, not the main working tree. */
+  linkedWorktree?: boolean;
 }
 
 export interface Prefs {
