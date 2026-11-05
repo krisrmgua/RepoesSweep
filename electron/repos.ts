@@ -168,6 +168,8 @@ export async function scan(
   const [rc, br] = await git(repo, "symbolic-ref", "--quiet", "--short", "HEAD");
   if (rc !== 0 || !br) {
     s.error = "detached HEAD";
+    s.linkedWorktree = await isLinkedWorktree(repo);
+    s.primary = await primaryBranch(repo);
     return s;
   }
   s.branch = br;
@@ -600,8 +602,47 @@ export async function pullAndFix(s: RepoStatus): Promise<string | null> {
   return err === null ? null : (lastLine(err) || "pull failed").slice(0, 160);
 }
 
+/** Absolute git dir, or null when rev-parse fails. */
+async function gitPath(repo: string, kind: "--git-dir" | "--git-common-dir"): Promise<string | null> {
+  const [rc, out] = await git(repo, "rev-parse", kind);
+  if (rc !== 0 || !out) return null;
+  return realpathSafe(path.isAbsolute(out) ? out : path.resolve(repo, out));
+}
+
+/** True when this checkout is a linked worktree rather than the main working tree. */
+async function isLinkedWorktree(repo: string): Promise<boolean> {
+  const gitDir = await gitPath(repo, "--git-dir");
+  const common = await gitPath(repo, "--git-common-dir");
+  return Boolean(gitDir && common && gitDir !== common);
+}
+
+/** Main checkout that owns a linked worktree, from the shared git directory. */
+async function mainWorktreePath(repo: string): Promise<string | null> {
+  const common = await gitPath(repo, "--git-common-dir");
+  return common ? path.dirname(common) : null;
+}
+
+/**
+ * Detached HEAD has no branch cleanup list. A linked worktree is removed.
+ * A normal checkout is switched onto its primary branch and pulled.
+ * Removal refuses a dirty or locked worktree instead of forcing it.
+ */
+async function cleanDetached(s: RepoStatus): Promise<string | null> {
+  if (await isLinkedWorktree(s.path)) {
+    const main = await mainWorktreePath(s.path);
+    if (!main || realpathSafe(main) === realpathSafe(s.path)) return "refusing to remove the main checkout";
+    const [rc, out] = await git(main, "worktree", "remove", s.path);
+    return rc === 0 ? null : (firstLine(out) || "worktree remove failed").slice(0, 160);
+  }
+  const primary = s.primary ?? (await primaryBranch(s.path));
+  if (!primary) return "no main/master to check out";
+  s.primary = primary;
+  return checkoutPrimaryPull(s);
+}
+
 /** Deletes confirmed unused branches, retaining every branch owned by another worktree. */
 export async function clean(s: RepoStatus): Promise<string | null> {
+  if (s.error === "detached HEAD") return cleanDetached(s);
   const primary = s.primary ?? (await primaryBranch(s.path));
   if (!primary) return "no main/master";
   let plan = await cleanupPlan(s.path, primary);

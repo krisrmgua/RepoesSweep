@@ -157,7 +157,7 @@ The root is the first of these that is set and exists:
 2. The first line of `~/.config/mygit/repo-root` (`%USERPROFILE%\.config\mygit\repo-root` on Windows)
 3. `~/git-repos` (`%USERPROFILE%\git-repos` on Windows)
 
-The root in use is shown at the bottom of Preferences. A detached HEAD or an empty repo is reported as an error for that clone and left out of the action lists.
+The root in use is shown at the bottom of Preferences. An empty repo is reported and left out of the action lists. A detached HEAD stays on the list with Clean: a linked worktree is removed from disk, and a normal checkout is switched to the primary branch and pulled. Removal refuses a worktree that has uncommitted files.
 
 ## How the panel works
 
@@ -184,6 +184,8 @@ A stash created here is labeled `Repoes Sweep auto-stash` or `Repoes Sweep befor
 A clone is listed when it has local branches other than the primary branch.
 
 **Clean** and **Clean all** ask first. Clean checks out the primary branch (stashing local edits if needed), deletes every other local head with `git branch -D`, then pulls with `--ff-only`. It re-reads branches at clean time, so an already-gone name is not an error. Branches checked out in another worktree are reported and skipped. `-D` deletes the branch even when it is not merged. This does not delete anything on the remote.
+
+A detached HEAD has its own **Clean**. On a linked worktree that removes the worktree with `git worktree remove` and leaves the main checkout alone. Git refuses when the worktree has uncommitted files or is locked, and the panel reports that instead of forcing the delete. On a normal checkout it checks out the primary branch and pulls.
 
 ### Remote branches
 

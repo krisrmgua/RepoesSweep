@@ -220,7 +220,9 @@ export class Sweeper {
 
   /** Clean succeeded. A pull ran too, unless the primary lives in another worktree. */
   private markCleaned(repo: RepoStatus): void {
+    const detached = repo.error === "detached HEAD";
     repo.cleanupBranches = [];
+    if (detached) repo.error = undefined;
     if (!repo.cleanupPrimaryElsewhere) this.markPulled(repo);
   }
 
