@@ -24,7 +24,7 @@ let iconKey = "";
 const isDev = process.env.REPOES_DEV === "1";
 
 const PANEL_WIDTH = 440;
-const PANEL_MIN_HEIGHT = 220;
+const PANEL_MIN_HEIGHT = 96;
 const PANEL_MAX_HEIGHT = 720;
 /** Opening the panel rescans when the last scan is older than this. */
 const STALE_SCAN_MS = 120_000;
@@ -152,10 +152,11 @@ function updateTray(): void {
   const repos = sweeper.repos;
   const clean = isClean(repos, sweeper.lastScan) && p.greenForPassing;
   const dark = nativeTheme.shouldUseDarkColors;
-  const key = `${clean}:${dark}`;
+  const backdrop = p.darkBarBackground;
+  const key = `${clean}:${dark}:${backdrop}`;
   if (key !== iconKey) {
     iconKey = key;
-    tray.setImage(createTrayIcon(clean, dark));
+    tray.setImage(createTrayIcon(clean, dark, backdrop));
   }
   const behind = repos.filter((r) => r.behind > 0 || r.gone).length;
   const cleanup = repos.filter((r) => r.cleanupBranches.length > 0).length;
@@ -236,8 +237,8 @@ function boot(): void {
   });
   nativeTheme.on("updated", () => updateTray());
 
-  tray = new Tray(createTrayIcon(false, nativeTheme.shouldUseDarkColors));
-  iconKey = `false:${nativeTheme.shouldUseDarkColors}`;
+  tray = new Tray(createTrayIcon(false, nativeTheme.shouldUseDarkColors, prefs.get().darkBarBackground));
+  iconKey = `false:${nativeTheme.shouldUseDarkColors}:${prefs.get().darkBarBackground}`;
   updateTray();
   tray.on("click", () => togglePanel());
   tray.on("right-click", () => {

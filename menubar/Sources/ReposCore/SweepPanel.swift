@@ -40,7 +40,7 @@ final class SweepModel: ObservableObject {
     @Published var result: String?
     @Published var settings = false
     @Published var confirmDelete: RemoteDeleteRequest?
-    @Published var expanded: Set<String> = ReposPrefs.rememberExpanded ? ReposPrefs.expandedSections : []
+    @Published var expanded: Set<String> = []
     @Published var contentHeight: CGFloat = 420
     @Published var chromeHeight: CGFloat = 80
     @Published var maximumHeight: CGFloat = 700
@@ -103,12 +103,11 @@ final class SweepModel: ObservableObject {
     func returnToOverview() {
         settings = false
         confirmDelete = nil
-        if !ReposPrefs.rememberExpanded { expanded = [] }
+        expanded = []
     }
 
     func toggleSection(_ title: String) {
         if expanded.contains(title) { expanded.remove(title) } else { expanded.insert(title) }
-        if ReposPrefs.rememberExpanded { ReposPrefs.expandedSections = expanded }
     }
 }
 
@@ -370,11 +369,6 @@ struct SweepPanel: View {
                     }
                     .padding(.leading, 14)
                 }
-                divider
-                prefToggle("Remember open sections", ReposPrefs.rememberExpanded) {
-                    ReposPrefs.rememberExpanded = $0
-                    ReposPrefs.expandedSections = $0 ? model.expanded : []
-                }
             }
             Text("Scan every").font(.system(size: 12, weight: .semibold)).padding(.horizontal, 2)
             card {
@@ -388,9 +382,7 @@ struct SweepPanel: View {
                     }
                 }.padding(10)
             }
-            Text(ReposPrefs.rememberExpanded
-                 ? "Open sections stay open after you close the panel."
-                 : "Open sections collapse each time you close the panel.")
+            Text("Repository cards start expanded each time you open the panel.")
                 .font(.system(size: 10)).foregroundColor(SweepStyle.secondary).padding(.horizontal, 2)
             Text("Timer scans skip fetch when a clone was fetched recently. Refresh always fetches.")
                 .font(.system(size: 10)).foregroundColor(SweepStyle.secondary).padding(.horizontal, 2)

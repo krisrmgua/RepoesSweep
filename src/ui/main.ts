@@ -31,9 +31,6 @@ declare global {
 }
 
 const SCAN_CHOICES = [5, 10, 15, 20, 30, 60, 240, 480, 720, 1440];
-const OUT_OF_DATE = "Out of date";
-const CLEANUP = "Cleanup";
-const REMOTE = "Remote branches";
 
 const ICONS = {
   outdated:
@@ -47,7 +44,6 @@ const ICONS = {
 let state: PanelState | null = null;
 let view: "overview" | "settings" = "overview";
 let expanded = new Set<string>();
-let expandedLoaded = false;
 let repoFilter: "all" | "updates" | "cleanup" | "remote" = "all";
 let closeConfirm: ((value: boolean) => void) | null = null;
 
@@ -246,7 +242,6 @@ async function handleAction(act: string, el: HTMLElement): Promise<void> {
     case "toggleRepo": {
       const key = `repo-collapsed:${el.dataset.path}`;
       if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
-      if (s.prefs.rememberExpanded) await window.sweep.setPrefs({expandedSections:[...expanded]});
       render();
       return;
     }
@@ -254,9 +249,6 @@ async function handleAction(act: string, el: HTMLElement): Promise<void> {
       const key = el.dataset.section!;
       if (expanded.has(key)) expanded.delete(key);
       else expanded.add(key);
-      if (s.prefs.rememberExpanded) {
-        await window.sweep.setPrefs({ expandedSections: [...expanded] });
-      }
       render();
       return;
     }
@@ -341,9 +333,6 @@ content.addEventListener("change", async (e) => {
   if (!key) return;
   const partial: Partial<Prefs> = {};
   (partial as Record<string, unknown>)[key] = input.checked;
-  if (key === "rememberExpanded") {
-    partial.expandedSections = input.checked ? [...expanded] : [];
-  }
   state = await window.sweep.setPrefs(partial);
   render();
 });
@@ -413,9 +402,9 @@ function renderSettings(s: PanelState): string {
     toggleHtml("greenForPassing", "Green for passing", p.greenForPassing),
     toggleHtml("showRemoteBranches", "Show remote branches", p.showRemoteBranches),
     p.showRemoteBranches
-      ? toggleHtml("showOnlyMyRemoteBranches", "Only my remote branches", p.showOnlyMyRemoteBranches, true)
+      ?     toggleHtml("showOnlyMyRemoteBranches", "Only my remote branches", p.showOnlyMyRemoteBranches, true)
       : "",
-    toggleHtml("rememberExpanded", "Remember open repositories", p.rememberExpanded),
+    toggleHtml("darkBarBackground", "Dark menu-bar background", p.darkBarBackground),
     toggleHtml("openAtLogin", "Open at login", p.openAtLogin),
   ].join("");
   const choices = SCAN_CHOICES.map(
@@ -425,11 +414,7 @@ function renderSettings(s: PanelState): string {
   return `<div class="card">${toggles}</div>
     <div class="pref-label">Scan every</div>
     <div class="card"><div class="choices">${choices}</div></div>
-    <div class="note">${
-      p.rememberExpanded
-        ? "Repository cards stay open after you close the panel."
-        : "Repository cards start expanded each time you open the panel."
-    }</div>
+    <div class="note">Repository cards start expanded each time you open the panel.</div>
     <div class="note">Timer scans skip fetch when a clone was fetched recently. Refresh always fetches.</div>
     <div class="note">Scanning <span class="mono">${escapeHtml(s.root)}</span></div>`;
 }
@@ -437,10 +422,6 @@ function renderSettings(s: PanelState): string {
 function render(): void {
   if (!state) return;
   const s = state;
-  if (!expandedLoaded) {
-    expanded = new Set(s.prefs.rememberExpanded ? s.prefs.expandedSections : []);
-    expandedLoaded = true;
-  }
   if (s.mark) {
     markImg.src = s.mark;
     markImg.classList.remove("hidden");
@@ -507,7 +488,7 @@ window.sweep.onChanged(() => void refreshState());
 window.sweep.onClosed(() => {
   closeConfirm?.(false);
   view = "overview";
-  if (state && !state.prefs.rememberExpanded) expanded.clear();
+  expanded.clear();
   render();
 });
 
