@@ -29,9 +29,26 @@ const PANEL_MAX_HEIGHT = 720;
 /** Opening the panel rescans when the last scan is older than this. */
 const STALE_SCAN_MS = 120_000;
 
-function panelUrl(): string {
-  if (isDev) return "http://127.0.0.1:5173";
-  return `file://${path.join(app.getAppPath(), "dist", "index.html")}`;
+/** Dev server URL from the environment. Only a loopback Vite address is accepted. */
+function loopbackDevUrl(raw: string | undefined): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw ?? "");
+  } catch {
+    throw new Error("Dev mode needs the Vite server URL in the environment.");
+  }
+  const loopback = parsed.hostname === "127.0.0.1" || parsed.hostname === "::1";
+  const web = parsed.protocol === "https:" || parsed.protocol === "http:";
+  if (!loopback || !web) throw new Error("The dev panel only loads from the loopback Vite server.");
+  return parsed.href;
+}
+
+function loadPanel(win: BrowserWindow): void {
+  if (isDev) {
+    void win.loadURL(loopbackDevUrl(process.env.REPOES_DEV_SERVER));
+    return;
+  }
+  void win.loadFile(path.join(app.getAppPath(), "dist", "index.html"));
 }
 
 function createPanel(): BrowserWindow {
@@ -56,7 +73,7 @@ function createPanel(): BrowserWindow {
   if (process.platform === "darwin") {
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   }
-  void win.loadURL(panelUrl());
+  loadPanel(win);
   win.on("blur", () => {
     if (!isDev) win.hide();
   });
