@@ -70,12 +70,6 @@ module.exports = {
       "greenForPassing": true,
       "showRemoteBranches": true,
       "showOnlyMyRemoteBranches": true,
-      "rememberExpanded": true,
-      "expandedSections": [
-        "Out of date",
-        "Cleanup",
-        "Remote branches"
-      ],
       "scanMinutes": 15,
       "openAtLogin": true
     },

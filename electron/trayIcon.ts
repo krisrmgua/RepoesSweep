@@ -57,6 +57,7 @@ function composeMark(
   heightPx: number,
   scaleFactor: number,
   square: boolean,
+  backdrop = false,
 ): NativeImage | null {
   const wings = loadLayer("RepoesSweepWings");
   const gem = loadLayer("RepoesSweepDiamond");
@@ -69,11 +70,14 @@ function composeMark(
     lw = heightPx;
     lh = Math.max(1, Math.round(heightPx / ratio));
   }
-  const cw = square ? heightPx : lw;
-  const ch = square ? heightPx : lh;
+  const padX = backdrop ? 8 : 0;
+  const padY = backdrop ? 4 : 0;
+  const cw = (square && !backdrop ? heightPx : lw) + padX * 2;
+  const ch = (square && !backdrop ? heightPx : lh) + padY * 2;
   const ox = Math.floor((cw - lw) / 2);
   const oy = Math.floor((ch - lh) / 2);
   const canvas = Buffer.alloc(cw * ch * 4);
+  if (backdrop) fillBackdrop(canvas, cw, ch);
   const layers: [NativeImage | null, Rgb][] = [
     [wings, wing],
     [loadLayer("RepoesSweepDiamondOutline"), BLACK],
@@ -87,6 +91,36 @@ function composeMark(
     paint(canvas, cw, bmp, lw, lh, ox, oy, color);
   }
   return nativeImage.createFromBitmap(canvas, { width: cw, height: ch, scaleFactor });
+}
+
+/** Coverage of a rounded rectangle at a pixel center. 1 is fully inside. */
+function roundCoverage(px: number, py: number, w: number, h: number, radius: number): number {
+  const r = Math.min(radius, w / 2, h / 2);
+  const left = px < r;
+  const right = px > w - r;
+  const top = py < r;
+  const bottom = py > h - r;
+  if (!left && !right && !top && !bottom) return 1;
+  if ((left || right) && (top || bottom)) {
+    const cx = left ? r : w - r;
+    const cy = top ? r : h - r;
+    return Math.max(0, Math.min(1, r - Math.hypot(px - cx, py - cy) + 0.5));
+  }
+  if (px < 0 || py < 0 || px > w || py > h) return 0;
+  return Math.max(0, Math.min(1, Math.min(px, py, w - px, h - py) + 0.5));
+}
+
+/** Black 55% capsule, the same backdrop Tickr and TokenPulse use on the menu bar. */
+function fillBackdrop(canvas: Buffer, cw: number, ch: number): void {
+  const radius = 10;
+  for (let y = 0; y < ch; y++) {
+    for (let x = 0; x < cw; x++) {
+      const coverage = roundCoverage(x + 0.5, y + 0.5, cw, ch, radius);
+      if (coverage <= 0) continue;
+      const i = (y * cw + x) * 4;
+      canvas[i + 3] = Math.round(255 * 0.55 * coverage);
+    }
+  }
 }
 
 function fallbackCircle(diamond: Rgb, px: number, scaleFactor: number): NativeImage {
@@ -110,12 +144,12 @@ function fallbackCircle(diamond: Rgb, px: number, scaleFactor: number): NativeIm
  * Menu-bar / tray image at 2x. Wings follow the bar (`darkBar` = light wings);
  * the diamond is green only when `clean`.
  */
-export function createTrayIcon(clean: boolean, darkBar: boolean): NativeImage {
+export function createTrayIcon(clean: boolean, darkBar: boolean, backdrop = false): NativeImage {
   const diamond = clean ? CLEAN_GREEN : IDLE_GRAY;
-  const wing = darkBar ? WHITE : BLACK;
+  const wing = darkBar || backdrop ? WHITE : BLACK;
   const win = process.platform === "win32";
   const px = win ? 32 : 36;
-  return composeMark(wing, diamond, px, 2, win) ?? fallbackCircle(diamond, px, 2);
+  return composeMark(wing, diamond, px, 2, win, backdrop) ?? fallbackCircle(diamond, px, 2);
 }
 
 const headerCache = new Map<boolean, string | null>();

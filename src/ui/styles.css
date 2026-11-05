@@ -160,6 +160,11 @@ main {
   overflow-y: auto;
 }
 
+/* Preferences are a normal stack. Flex shrink was clipping the toggle card. */
+main:not(.workbench) > * {
+  flex-shrink: 0;
+}
+
 .status-line {
   font-size: 11px;
   color: var(--muted);

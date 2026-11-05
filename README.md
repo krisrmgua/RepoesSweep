@@ -2,7 +2,7 @@
 
 Repoes Sweep is a tray app for **macOS** and **Windows** that watches the git clones on your machine and lets you catch them up from one panel. It fetches each clone, then shows what is behind, which local branches are left over, and which remote branches are still on `origin`.
 
-The panel is a dark inbox that opens from the menu-bar icon (Mac) or the system-tray icon (Windows). The three lists start collapsed. Click a header to open it. Clicking away closes the panel, and the next open starts collapsed again unless you turn on **Remember open sections**.
+The panel is a dark inbox that opens from the menu-bar icon (Mac) or the system-tray icon (Windows). Repository cards start expanded. Clicking away closes the panel, and the next open starts expanded again.
 
 Git has to already work in a terminal for those clones. The app does not install git and it does not store a password or a token.
 
@@ -161,7 +161,7 @@ The root in use is shown at the bottom of Preferences. A detached HEAD or an emp
 
 ## How the panel works
 
-A scan runs when the app launches, on the interval you pick, and when you press refresh. Opening the panel also scans if the last one is more than two minutes old. Scans fetch `origin` with `--prune`, up to eight clones at a time. Pull, Pull & Fix, Clean, remote deletes, and the matching "all" actions run one job at a time and rescan once the queue is empty, so counts and the green icon update without a manual refresh. While jobs run, the overview shows the current action and, for a batch, `N of M` plus how many are left.
+A scan runs when the app launches, on the interval you pick, and when you press refresh. Opening the panel also scans if the last one is more than two minutes old. Scans fetch `origin` with `--prune`, up to eight clones at a time. Pull, Pull & Fix, Clean, remote deletes, and the matching "all" actions run one job at a time. A repo leaves the list as soon as its job succeeds. A rescan runs once the queue is empty and corrects anything the live update missed. While jobs run, the overview shows the current action and, for a batch, `N of M` plus how many are left.
 
 The overview has three sections. The count stays on the header while the section is collapsed.
 
@@ -202,7 +202,7 @@ The mark is the bolt, the diamond, and the tail. The diamond has a black outline
 - **Light gray** while any clone is out of date or has extra local branches.
 - **Green** when those two are empty and **Green for passing** is on. Remote branches do not keep the diamond gray.
 
-The bolts and the tail follow the system theme: light in dark mode, dark in light mode. Hover the icon for `N behind · N cleanup · N remote`. Right-click for **Open**, **Refresh**, and **Quit**.
+The bolts and the tail follow the system theme: light in dark mode, dark in light mode. **Dark menu-bar background** draws a dark rounded backdrop behind the mark and keeps the bolts light. Hover the icon for `N behind · N cleanup · N remote`. Right-click for **Open**, **Refresh**, and **Quit**.
 
 ## Preferences
 
@@ -211,7 +211,7 @@ The bolts and the tail follow the system theme: light in dark mode, dark in ligh
 | Green for passing | On. The diamond can turn green, and a merged remote branch is shown in green. |
 | Show remote branches | On. Hides the Remote branches section when off. |
 | Only my remote branches | On. Shown under Show remote branches. Keeps tips authored by this clone's `user.email`. |
-| Remember open sections | Off. Closing the panel collapses every section. On keeps the ones you left open, including after a restart. |
+| Dark menu-bar background | Off. On draws a dark rounded backdrop behind the menu-bar mark. |
 | Open at login | On. Registers the installed app as a login item (macOS and Windows). |
 | Scan every | 10 minutes. Choices run from 5 minutes to 1 day. Timer scans skip `git fetch` when FETCH_HEAD is still fresh; the refresh button always fetches. |
 

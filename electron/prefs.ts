@@ -3,14 +3,11 @@ import { execFileSync } from "node:child_process";
 import { prefsPath } from "./paths";
 import { SCAN_CHOICES, type Prefs } from "./types";
 
-const SECTIONS = ["Out of date", "Cleanup", "Remote branches"];
-
 export const DEFAULT_PREFS: Prefs = {
   greenForPassing: true,
   showRemoteBranches: true,
   showOnlyMyRemoteBranches: true,
-  rememberExpanded: false,
-  expandedSections: [],
+  darkBarBackground: false,
   scanMinutes: 10,
   openAtLogin: true,
 };
@@ -21,14 +18,11 @@ function sanitize(input: Partial<Prefs>, base: Prefs): Prefs {
     "greenForPassing",
     "showRemoteBranches",
     "showOnlyMyRemoteBranches",
-    "rememberExpanded",
+    "darkBarBackground",
     "openAtLogin",
   ] as const) {
     const value = input[key];
     if (typeof value === "boolean") out[key] = value;
-  }
-  if (Array.isArray(input.expandedSections)) {
-    out.expandedSections = input.expandedSections.filter((s) => SECTIONS.includes(s));
   }
   if (typeof input.scanMinutes === "number" && SCAN_CHOICES.includes(input.scanMinutes)) {
     out.scanMinutes = input.scanMinutes;
@@ -62,7 +56,6 @@ function fromSwiftDefaults(): Partial<Prefs> {
     greenForPassing: bool("repos.greenForPassing"),
     showRemoteBranches: bool("repos.showRemoteBranches"),
     showOnlyMyRemoteBranches: bool("repos.showOnlyMyRemoteBranches"),
-    rememberExpanded: bool("repos.rememberExpanded"),
   };
   if (Number.isFinite(minutes)) out.scanMinutes = minutes;
   return out;

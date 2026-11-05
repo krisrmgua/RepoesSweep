@@ -36,8 +36,8 @@ export interface Prefs {
   greenForPassing: boolean;
   showRemoteBranches: boolean;
   showOnlyMyRemoteBranches: boolean;
-  rememberExpanded: boolean;
-  expandedSections: string[];
+  /** Dark rounded backdrop behind the menu-bar mark, as on the other apps. */
+  darkBarBackground: boolean;
   scanMinutes: number;
   openAtLogin: boolean;
 }

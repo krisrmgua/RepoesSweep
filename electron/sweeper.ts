@@ -41,7 +41,8 @@ export function isClean(repos: RepoStatus[], updated: Date | null): boolean {
 
 /**
  * Owns the scan loop and the git job queue. Jobs run one at a time so pulls,
- * cleans, and deletes never overlap; when the queue drains it rescans.
+ * cleans, and deletes never overlap. A repo leaves the list as soon as its job
+ * succeeds. When the queue drains, a rescan confirms the result.
  */
 export class Sweeper {
   repos: RepoStatus[] = [];
@@ -156,19 +157,31 @@ export class Sweeper {
 
   pull(paths: string[]): void {
     for (const repo of this.lookup(paths)) {
-      this.enqueue(`Pull ${repo.name}`, () => pull(repo.path));
+      this.enqueue(`Pull ${repo.name}`, async () => {
+        const err = await pull(repo.path);
+        if (!err) this.markPulled(repo);
+        return err;
+      });
     }
   }
 
   pullFix(paths: string[]): void {
     for (const repo of this.lookup(paths)) {
-      this.enqueue(`Pull & Fix ${repo.name}`, () => pullAndFix(repo));
+      this.enqueue(`Pull & Fix ${repo.name}`, async () => {
+        const err = await pullAndFix(repo);
+        if (!err) this.markPulled(repo);
+        return err;
+      });
     }
   }
 
   clean(paths: string[]): void {
     for (const repo of this.lookup(paths)) {
-      this.enqueue(`Clean ${repo.name}`, () => clean(repo));
+      this.enqueue(`Clean ${repo.name}`, async () => {
+        const err = await clean(repo);
+        if (!err) this.markCleaned(repo);
+        return err;
+      });
     }
   }
 
@@ -187,22 +200,33 @@ export class Sweeper {
       })
       .filter((x): x is { repo: RepoStatus; branches: string[] } => x !== null);
     if (!items.length) return;
-    const count = items.reduce((n, i) => n + i.branches.length, 0);
-    let label: string;
-    if (request.scope === "merged") label = `Delete ${count} merged remotes`;
-    else if (request.scope === "withoutMR") label = `Delete ${count} remotes without MR`;
-    else if (request.scope === "all") label = `Delete ${count} remotes`;
-    else if (count === 1) label = `Delete origin/${items[0].branches[0]}`;
-    else label = `Delete ${count} branches on ${items[0].repo.name}`;
 
-    this.enqueue(label, async () => {
-      const failed: string[] = [];
-      for (const { repo, branches } of items) {
-        const err = await deleteRemotes(repo.path, branches, repo.primary);
-        if (err) failed.push(`${repo.name}: ${err}`);
+    for (const { repo, branches } of items) {
+      for (const branch of branches) {
+        this.enqueue(`Delete origin/${branch}`, async () => {
+          const err = await deleteRemotes(repo.path, [branch], repo.primary);
+          if (!err) this.markRemoteDeleted(repo, branch);
+          return err ? `${repo.name}: ${err}` : null;
+        });
       }
-      return failed.length ? failed.join("; ").slice(0, 200) : null;
-    });
+    }
+  }
+
+  /** Pull succeeded, so this clone is no longer an update. */
+  private markPulled(repo: RepoStatus): void {
+    repo.behind = 0;
+    repo.gone = false;
+  }
+
+  /** Clean succeeded. A pull ran too, unless the primary lives in another worktree. */
+  private markCleaned(repo: RepoStatus): void {
+    repo.cleanupBranches = [];
+    if (!repo.cleanupPrimaryElsewhere) this.markPulled(repo);
+  }
+
+  /** One remote branch delete succeeded. */
+  private markRemoteDeleted(repo: RepoStatus, branch: string): void {
+    repo.remoteBranches = repo.remoteBranches.filter((item) => item.name !== branch);
   }
 
   private lookup(paths: string[]): RepoStatus[] {

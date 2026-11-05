@@ -6,8 +6,6 @@ enum ReposPrefs {
     private static let greenKey = "repos.greenForPassing"
     private static let remoteKey = "repos.showRemoteBranches"
     private static let myRemoteKey = "repos.showOnlyMyRemoteBranches"
-    private static let rememberKey = "repos.rememberExpanded"
-    private static let expandedKey = "repos.expandedSections"
     private static let scanKey = "repos.scanMinutes"
 
     static let scanChoices = [5, 10, 15, 20, 30, 60, 240, 480, 720, 1440]
@@ -24,15 +22,6 @@ enum ReposPrefs {
     static var showOnlyMyRemoteBranches: Bool {
         get { bool(myRemoteKey, true) }
         set { UserDefaults.standard.set(newValue, forKey: myRemoteKey) }
-    }
-    /// On keeps Out of date, Cleanup, and Remote branches open after the panel closes.
-    static var rememberExpanded: Bool {
-        get { bool(rememberKey, false) }
-        set { UserDefaults.standard.set(newValue, forKey: rememberKey) }
-    }
-    static var expandedSections: Set<String> {
-        get { Set(UserDefaults.standard.stringArray(forKey: expandedKey) ?? []) }
-        set { UserDefaults.standard.set(Array(newValue), forKey: expandedKey) }
     }
     /// Minutes between repo scans (each scan fetches every clone).
     static var scanMinutes: Int {
