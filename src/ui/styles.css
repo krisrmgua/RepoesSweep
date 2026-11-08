@@ -634,3 +634,6 @@ main.workbench {display:block}.repo-work-head .chev {display:block;width:7px;hei
 .repo-identity strong {font-size:14px}.repo-work-head {padding:8px 11px}.repo-work-card {margin-bottom:10px}.work-task {padding:6px 0}.work-task .inline,.repo-remote-footer .inline {padding:4px 8px;font-size:10.5px}.task-icon.tone-warn {color:#f5c542}.result-banner {font-size:12px;padding:8px 11px;margin-bottom:10px}.result-banner > svg {width:18px;height:18px}.repo-filters {margin-bottom:9px}.repo-filters button {font-size:11.5px;padding:5px 3px}.workbench-toolbar {gap:6px;margin-bottom:10px}.workbench-toolbar .act {font-size:10.5px;padding:5px 8px}.remote-tools {font-size:10px}.branch-state.tone-ok {background:#173c34}.repo-status {font-size:10.5px}
 
 .worktree-note {border-top:1px solid #34435d;padding:8px 0;color:#a6b7d3;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+
+.local-branch {display:inline-flex;align-items:center;gap:5px;margin:2px 8px 2px 0;white-space:nowrap}
+.local-branch > span:first-child {overflow:hidden;text-overflow:ellipsis}
