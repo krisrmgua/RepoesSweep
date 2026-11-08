@@ -80,6 +80,13 @@ function outdated(s: PanelState): RepoStatus[] {
   return s.repos.filter((r) => r.behind > 0 || r.gone);
 }
 
+/** Names the local branches that are not merged yet, so the confirm dialog can say what -D loses. */
+function unmergedNote(repo: RepoStatus): string {
+  const merged = new Set(repo.cleanupMerged ?? []);
+  const unmerged = repo.cleanupBranches.filter(name => !merged.has(name));
+  return unmerged.length ? ` Not merged into ${repo.primary ?? "main"} yet: ${unmerged.join(", ")}.` : "";
+}
+
 function cleanup(s: PanelState): RepoStatus[] {
   return s.repos.filter((r) => r.cleanupBranches.length > 0 || r.error === "detached HEAD");
 }
@@ -281,7 +288,7 @@ async function handleAction(act: string, el: HTMLElement): Promise<void> {
         ? repo.linkedWorktree
           ? "Removes this detached worktree from disk. The main checkout stays as it is. Refuses if the worktree has uncommitted files. Nothing on the remote changes."
           : `Checks out ${primary}, then pulls. Local edits are stashed first if checkout needs a clean tree. Nothing on the remote changes.`
-        : `${repo.cleanupPrimaryElsewhere ? "Keeps this worktree on its current branch and leaves the primary worktree unchanged." : `Checks out ${primary}, then pulls after cleanup.`} Force-deletes ${plural(repo.cleanupBranches.length, "local branch", "local branches")} (${repo.cleanupBranches.join(", ")}) with git branch -D. Unmerged commits on those branches are lost. Branches in use by worktrees are kept. Nothing on the remote changes.`;
+        : `${repo.cleanupPrimaryElsewhere ? "Keeps this worktree on its current branch and leaves the primary worktree unchanged." : `Checks out ${primary}, then pulls after cleanup.`} Force-deletes ${plural(repo.cleanupBranches.length, "local branch", "local branches")} (${repo.cleanupBranches.join(", ")}) with git branch -D. Unmerged commits on those branches are lost. Branches in use by worktrees are kept. Nothing on the remote changes.${unmergedNote(repo)}`;
       const ok = await askConfirm({
         title: `Clean ${repo.name}?`,
         message,
@@ -389,7 +396,16 @@ function renderOverview(s: PanelState): string {
     if (repo.error === "detached HEAD") tasks.push(`<div class="work-task"><span class="task-icon tone-warn">${ICONS.cleanup}</span><span class="task-description"><span class="task-label">Detached HEAD.</span> ${repo.linkedWorktree ? "Removes this worktree." : "Checks out the primary branch."}</span><div class="task-actions"><button class="inline" data-act="clean" data-path="${path}">Clean</button></div></div>`);
     else if (repo.error) tasks.push(`<div class="repo-error" role="status">${escapeHtml(repo.error)}</div>`);
     if (update && (repoFilter === "all" || repoFilter === "updates")) tasks.push(`<div class="work-task"><span class="task-icon tone-warn">${ICONS.outdated}</span><span class="task-description">${repo.gone ? "Remote branch gone" : `Behind ${plural(repo.behind,"commit")}`}</span><div class="task-actions">${!repo.gone ? `<button class="inline primary" data-act="pull" data-path="${path}">Pull</button>` : ""}<button class="inline" data-act="pullFix" data-path="${path}">Pull &amp; Fix</button></div></div>`);
-    if (repo.cleanupBranches.length && (repoFilter === "all" || repoFilter === "cleanup")) tasks.push(`<div class="work-task"><span class="task-icon tone-warn">${ICONS.cleanup}</span><span class="task-description"><span class="task-label">Local ${repo.cleanupBranches.length === 1 ? "branch" : "branches"}:</span> ${escapeHtml(repo.cleanupBranches.join(", "))}</span><div class="task-actions"><button class="inline" data-act="clean" data-path="${path}">Clean</button></div></div>`);
+    if (repo.cleanupBranches.length && (repoFilter === "all" || repoFilter === "cleanup")) {
+      const merged = new Set(repo.cleanupMerged ?? []);
+      const mergedInto = escapeHtml(repo.primary ?? "main");
+      const chips = repo.cleanupBranches.map(name => {
+        const done = merged.has(name);
+        const tone = done ? (s.prefs.greenForPassing ? "tone-ok" : "tone-muted") : "tone-warn";
+        return `<span class="local-branch"><span>${escapeHtml(name)}</span><span class="branch-state ${tone}">${done ? `Merged into ${mergedInto}` : "Not merged"}</span></span>`;
+      }).join("");
+      tasks.push(`<div class="work-task"><span class="task-icon tone-warn">${ICONS.cleanup}</span><span class="task-description"><span class="task-label">Local ${repo.cleanupBranches.length === 1 ? "branch" : "branches"}:</span> ${chips}</span><div class="task-actions"><button class="inline" data-act="clean" data-path="${path}">Clean</button></div></div>`);
+    }
     if (s.prefs.showRemoteBranches && (repoFilter === "all" || repoFilter === "remote")) {
       const branches = listed(repo,s.prefs);
       branches.forEach(branch => tasks.push(`<div class="work-task remote-task"><span class="task-icon tone-ok">${ICONS.remote}</span><span class="task-description"><span class="task-label">Remote branch:</span> ${escapeHtml(branch.name)}</span><span class="branch-state ${branch.merged ? s.prefs.greenForPassing ? "tone-ok" : "tone-muted" : "tone-warn"}">${branch.merged ? "Merged" : "Not merged"}</span>${branch.hasOpenMR ? '<span class="mr" title="Open merge request">MR</span>' : ""}<button class="inline danger-text" data-act="deleteBranch" data-path="${path}" data-branch="${escapeHtml(branch.name)}">Delete</button></div>`));

@@ -208,6 +208,7 @@ export async function scan(
   const plan = await cleanupPlan(repo, primary);
   if (plan) {
     s.cleanupBranches = plan.candidates;
+    s.cleanupMerged = plan.merged;
     s.protectedCleanupBranches = plan.protected;
     s.cleanupPrimaryElsewhere = plan.primaryElsewhere;
   } else s.error = "Could not inspect local branch worktrees";
@@ -487,10 +488,13 @@ async function heldByOtherWorktree(repo: string, branch: string): Promise<boolea
 
 /** Branch ownership is shared by all linked worktrees. Never move another worktree. */
 async function cleanupPlan(repo: string, primary: string): Promise<{
-  candidates: string[]; protected: string[]; primaryElsewhere: boolean;
+  candidates: string[]; merged: string[]; protected: string[]; primaryElsewhere: boolean;
 } | null> {
   const [rc, out] = await git(repo, "for-each-ref", "--format=%(refname:short)%09%(worktreepath)", "refs/heads/");
   if (rc !== 0) return null;
+  // Local branches already reachable from origin/<primary>, so they are safe to drop.
+  const [mrc, mout] = await git(repo, "for-each-ref", `--merged=refs/remotes/origin/${primary}`, "--format=%(refname:short)", "refs/heads/");
+  const mergedSet = new Set(mrc === 0 ? lines(mout) : []);
   const heads = lines(out).map(line => {
     const tab = line.indexOf("\t");
     return {name: tab < 0 ? line : line.slice(0,tab), worktree: tab < 0 ? "" : line.slice(tab+1)};
@@ -507,7 +511,12 @@ async function cleanupPlan(repo: string, primary: string): Promise<{
     if (head.worktree && (realpathSafe(head.worktree) !== here || primaryElsewhere)) protectedBranches.push(head.name);
     else candidates.push(head.name);
   }
-  return {candidates, protected:protectedBranches, primaryElsewhere};
+  return {
+    candidates,
+    merged: candidates.filter(name => mergedSet.has(name)),
+    protected: protectedBranches,
+    primaryElsewhere,
+  };
 }
 
 function blockedByLocalChanges(out: string): boolean {

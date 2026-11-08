@@ -222,6 +222,7 @@ export class Sweeper {
   private markCleaned(repo: RepoStatus): void {
     const detached = repo.error === "detached HEAD";
     repo.cleanupBranches = [];
+    repo.cleanupMerged = [];
     if (detached) repo.error = undefined;
     if (!repo.cleanupPrimaryElsewhere) this.markPulled(repo);
   }
