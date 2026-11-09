@@ -1,6 +1,6 @@
 export interface RemoteBranch {
   name: string;
-  /** Reachable from origin/<primary>. */
+  /** Reachable from origin/<primary>, or squash-landed as other commit(s) on primary. */
   merged: boolean;
   /** Tip author email matches this clone's user.email. */
   mine: boolean;
@@ -18,7 +18,7 @@ export interface RepoStatus {
   primary?: string;
   /** Local branches other than primary. */
   cleanupBranches: string[];
-  /** Subset of cleanupBranches already merged into origin/<primary>. */
+  /** Subset of cleanupBranches on origin/<primary> (ancestry or squash-landed as other SHAs). */
   cleanupMerged?: string[];
   /** Local branches retained because a worktree is using them. */
   protectedCleanupBranches?: string[];
