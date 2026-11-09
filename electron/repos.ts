@@ -62,17 +62,30 @@ function lines(text: string): string[] {
   return text.split(/\r?\n/).filter((l) => l.length > 0);
 }
 
+/** Skip expensive `git cherry` when the branch is huge vs upstream. */
+const SQUASH_CHERRY_MAX_COMMITS = 40;
+
 /**
- * True only when `ref` still has commits not in `upstream` ancestry, but every
- * one of those commits already landed as a *different* SHA on upstream
- * (`git cherry` lines are all `-`). That is the squash / recreate-merge case.
- * Empty cherry (tip already contained) is left to `--merged` ancestry.
+ * Local cleanup only: true when `ref` still has commits not in `upstream`
+ * ancestry, but every one already landed as a *different* SHA on upstream
+ * (`git cherry` all `-`). Empty / huge ranges are not treated as squash-merged.
  */
 async function isSquashLandedOnUpstream(
   repo: string,
   upstream: string,
   ref: string,
 ): Promise<boolean> {
+  // Cheap gate: cherry walks history; bail if nothing unique or too many commits.
+  const [lrc, lout] = await git(
+    repo,
+    "rev-list",
+    `--max-count=${SQUASH_CHERRY_MAX_COMMITS + 1}`,
+    `${upstream}..${ref}`,
+  );
+  if (lrc !== 0) return false;
+  const unique = lines(lout);
+  if (unique.length === 0 || unique.length > SQUASH_CHERRY_MAX_COMMITS) return false;
+
   const [rc, out] = await git(repo, "cherry", upstream, ref);
   if (rc !== 0) return false;
   const rows = lines(out);
@@ -267,7 +280,6 @@ async function remoteBranches(
     "refs/remotes/origin/",
   );
   const merged = new Set(mrc === 0 ? lines(mout) : []);
-  const upstream = `origin/${primary}`;
   const prefix = "refs/remotes/origin/";
   const result: RemoteBranch[] = [];
   for (const line of lines(out)) {
@@ -277,13 +289,10 @@ async function remoteBranches(
     if (ref === prefix + primary || !ref.startsWith(prefix)) continue;
     const author = parts.length > 2 ? normalizeEmail(parts[2]) : "";
     const name = ref.slice(prefix.length);
-    let isMerged = merged.has(ref);
-    if (!isMerged) {
-      isMerged = await isSquashLandedOnUpstream(repo, upstream, ref);
-    }
+    // Ancestry only for remotes — squash cherry per origin/* ref made scans crawl.
     result.push({
       name,
-      merged: isMerged,
+      merged: merged.has(ref),
       mine: !!me && !!author && me === author,
       hasOpenMR: openMRs.has(name),
     });
@@ -544,12 +553,15 @@ async function cleanupPlan(repo: string, primary: string): Promise<{
       candidates.push(head.name);
     }
   }
-  const merged: string[] = [];
-  for (const name of candidates) {
-    if (mergedSet.has(name) || (await isSquashLandedOnUpstream(repo, upstream, name))) {
-      merged.push(name);
-    }
-  }
+  const ancestryMerged = candidates.filter((name) => mergedSet.has(name));
+  const maybeSquash = candidates.filter((name) => !mergedSet.has(name));
+  const squashFlags = await Promise.all(
+    maybeSquash.map((name) => isSquashLandedOnUpstream(repo, upstream, name)),
+  );
+  const merged = [
+    ...ancestryMerged,
+    ...maybeSquash.filter((_, i) => squashFlags[i]),
+  ];
   return {
     candidates,
     merged,
