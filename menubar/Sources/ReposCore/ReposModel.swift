@@ -18,7 +18,7 @@ struct RepoStatus: Identifiable {
 struct RemoteBranch: Equatable, Identifiable {
     var id: String { name }
     let name: String
-    let merged: Bool   // reachable from origin/<primary>
+    let merged: Bool   // reachable from origin/<primary>, or squash-landed as other SHAs
     let mine: Bool     // tip author email matches this clone's user.email
     let hasOpenMR: Bool // open GitLab MR with this source branch (via glab)
 }
@@ -174,7 +174,8 @@ enum ReposModel {
         let (rc, out) = git(path, "for-each-ref", "--format=%(refname)%09%(symref)%09%(authoremail)", "refs/remotes/origin/")
         guard rc == 0 else { return [] }
         let (mrc, mout) = git(path, "for-each-ref", "--merged=refs/remotes/origin/\(primary)", "--format=%(refname)", "refs/remotes/origin/")
-        let merged = mrc == 0 ? Set(mout.split(separator: "\n").map(String.init)) : []
+        var merged = mrc == 0 ? Set(mout.split(separator: "\n").map(String.init)) : []
+        let upstream = "origin/\(primary)"
         let prefix = "refs/remotes/origin/"
         var result: [RemoteBranch] = []
         for line in out.split(separator: "\n") {
@@ -185,7 +186,16 @@ enum ReposModel {
             let author = parts.count > 2 ? normalizeEmail(String(parts[2])) : ""
             let mine = !me.isEmpty && !author.isEmpty && me == author
             let name = String(ref.dropFirst(prefix.count))
-            result.append(RemoteBranch(name: name, merged: merged.contains(ref), mine: mine, hasOpenMR: openMRs.contains(name)))
+            var isMerged = merged.contains(ref)
+            if !isMerged {
+                // Only when unique commits landed on primary as different SHAs (squash).
+                let (crc, cout) = git(path, "cherry", upstream, ref)
+                if crc == 0 {
+                    let rows = cout.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
+                    isMerged = !rows.isEmpty && rows.allSatisfy { $0.hasPrefix("-") }
+                }
+            }
+            result.append(RemoteBranch(name: name, merged: isMerged, mine: mine, hasOpenMR: openMRs.contains(name)))
         }
         return result.sorted { $0.name.lowercased() < $1.name.lowercased() }
     }

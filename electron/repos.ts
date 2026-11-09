@@ -62,6 +62,24 @@ function lines(text: string): string[] {
   return text.split(/\r?\n/).filter((l) => l.length > 0);
 }
 
+/**
+ * True only when `ref` still has commits not in `upstream` ancestry, but every
+ * one of those commits already landed as a *different* SHA on upstream
+ * (`git cherry` lines are all `-`). That is the squash / recreate-merge case.
+ * Empty cherry (tip already contained) is left to `--merged` ancestry.
+ */
+async function isSquashLandedOnUpstream(
+  repo: string,
+  upstream: string,
+  ref: string,
+): Promise<boolean> {
+  const [rc, out] = await git(repo, "cherry", upstream, ref);
+  if (rc !== 0) return false;
+  const rows = lines(out);
+  if (rows.length === 0) return false;
+  return rows.every((line) => line.startsWith("-"));
+}
+
 export async function primaryBranch(repo: string): Promise<string | undefined> {
   const [rc, head] = await git(
     repo,
@@ -249,6 +267,7 @@ async function remoteBranches(
     "refs/remotes/origin/",
   );
   const merged = new Set(mrc === 0 ? lines(mout) : []);
+  const upstream = `origin/${primary}`;
   const prefix = "refs/remotes/origin/";
   const result: RemoteBranch[] = [];
   for (const line of lines(out)) {
@@ -258,9 +277,13 @@ async function remoteBranches(
     if (ref === prefix + primary || !ref.startsWith(prefix)) continue;
     const author = parts.length > 2 ? normalizeEmail(parts[2]) : "";
     const name = ref.slice(prefix.length);
+    let isMerged = merged.has(ref);
+    if (!isMerged) {
+      isMerged = await isSquashLandedOnUpstream(repo, upstream, ref);
+    }
     result.push({
       name,
-      merged: merged.has(ref),
+      merged: isMerged,
       mine: !!me && !!author && me === author,
       hasOpenMR: openMRs.has(name),
     });
@@ -493,14 +516,21 @@ async function cleanupPlan(repo: string, primary: string): Promise<{
   const [rc, out] = await git(repo, "for-each-ref", "--format=%(refname:short)%09%(worktreepath)", "refs/heads/");
   if (rc !== 0) return null;
   // Local branches already reachable from origin/<primary>, so they are safe to drop.
-  const [mrc, mout] = await git(repo, "for-each-ref", `--merged=refs/remotes/origin/${primary}`, "--format=%(refname:short)", "refs/heads/");
+  const [mrc, mout] = await git(
+    repo,
+    "for-each-ref",
+    `--merged=refs/remotes/origin/${primary}`,
+    "--format=%(refname:short)",
+    "refs/heads/",
+  );
   const mergedSet = new Set(mrc === 0 ? lines(mout) : []);
-  const heads = lines(out).map(line => {
+  const upstream = `origin/${primary}`;
+  const heads = lines(out).map((line) => {
     const tab = line.indexOf("\t");
-    return {name: tab < 0 ? line : line.slice(0,tab), worktree: tab < 0 ? "" : line.slice(tab+1)};
+    return { name: tab < 0 ? line : line.slice(0, tab), worktree: tab < 0 ? "" : line.slice(tab + 1) };
   });
   const here = realpathSafe(repo);
-  const owner = heads.find(head => head.name === primary)?.worktree;
+  const owner = heads.find((head) => head.name === primary)?.worktree;
   const primaryElsewhere = Boolean(owner && realpathSafe(owner) !== here);
   const candidates: string[] = [];
   const protectedBranches: string[] = [];
@@ -508,12 +538,21 @@ async function cleanupPlan(repo: string, primary: string): Promise<{
     if (head.name === primary) continue;
     // The current non-primary branch can be cleaned after switching to primary,
     // but only if primary is available in this worktree.
-    if (head.worktree && (realpathSafe(head.worktree) !== here || primaryElsewhere)) protectedBranches.push(head.name);
-    else candidates.push(head.name);
+    if (head.worktree && (realpathSafe(head.worktree) !== here || primaryElsewhere)) {
+      protectedBranches.push(head.name);
+    } else {
+      candidates.push(head.name);
+    }
+  }
+  const merged: string[] = [];
+  for (const name of candidates) {
+    if (mergedSet.has(name) || (await isSquashLandedOnUpstream(repo, upstream, name))) {
+      merged.push(name);
+    }
   }
   return {
     candidates,
-    merged: candidates.filter(name => mergedSet.has(name)),
+    merged,
     protected: protectedBranches,
     primaryElsewhere,
   };
