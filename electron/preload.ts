@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld("sweep", {
   hide: () => ipcRenderer.invoke("sweep:hide"),
   quit: () => ipcRenderer.invoke("sweep:quit"),
   fitHeight: (height: number) => ipcRenderer.invoke("sweep:fitHeight", height),
+  openExternal: (url: string) => ipcRenderer.invoke("sweep:openExternal", url),
+  dismissUpdate: () => ipcRenderer.invoke("sweep:dismissUpdate"),
   onChanged: (cb: () => void) => {
     const handler = () => cb();
     ipcRenderer.on("sweep:changed", handler);
