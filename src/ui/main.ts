@@ -24,6 +24,8 @@ declare global {
       hide: () => Promise<void>;
       quit: () => Promise<void>;
       fitHeight: (height: number) => Promise<void>;
+      openExternal: (url: string) => Promise<void>;
+      dismissUpdate: () => Promise<void>;
       onChanged: (cb: () => void) => () => void;
       onClosed: (cb: () => void) => () => void;
     };
@@ -48,6 +50,7 @@ let repoFilter: "all" | "updates" | "cleanup" | "remote" = "all";
 let closeConfirm: ((value: boolean) => void) | null = null;
 
 const content = document.getElementById("content")!;
+const updateEl = document.getElementById("update")!;
 const markImg = document.getElementById("mark") as HTMLImageElement;
 const brand = document.getElementById("brand")!;
 const back = document.getElementById("back")!;
@@ -112,8 +115,31 @@ function requestFit(): void {
     if (!app) return;
     const header = app.querySelector<HTMLElement>(".top");
     const footer = app.querySelector<HTMLElement>(".foot");
-    void window.sweep.fitHeight(Math.ceil(content.scrollHeight + (header?.offsetHeight || 0) + (footer?.offsetHeight || 0)));
+    void window.sweep.fitHeight(
+      Math.ceil(
+        content.scrollHeight +
+          (header?.offsetHeight || 0) +
+          (updateEl.offsetHeight || 0) +
+          (footer?.offsetHeight || 0),
+      ),
+    );
   });
+}
+
+function renderUpdateBar(s: PanelState): void {
+  const update = s.updateAvailable;
+  if (!update) {
+    updateEl.classList.add("hidden");
+    updateEl.innerHTML = "";
+    return;
+  }
+  updateEl.classList.remove("hidden");
+  updateEl.innerHTML = `<div class="update-pill">
+    <button type="button" class="update-open" data-act="open-update" data-url="${escapeHtml(update.url)}" title="Open the new version">
+      v${escapeHtml(update.version)} available
+    </button>
+    <button type="button" class="dismiss" data-act="dismiss-update" title="Dismiss">×</button>
+  </div>`;
 }
 
 /* ---------- confirm ---------- */
@@ -337,10 +363,22 @@ async function handleAction(act: string, el: HTMLElement): Promise<void> {
       state = await window.sweep.setPrefs({ scanMinutes: Number(el.dataset.minutes) });
       render();
       return;
+    case "open-update":
+      if (el.dataset.url) void window.sweep.openExternal(el.dataset.url);
+      return;
+    case "dismiss-update":
+      void window.sweep.dismissUpdate();
+      return;
   }
 }
 
 content.addEventListener("click", (e) => {
+  const el = (e.target as HTMLElement).closest<HTMLElement>("[data-act]");
+  if (!el) return;
+  void handleAction(el.dataset.act!, el);
+});
+
+updateEl.addEventListener("click", (e) => {
   const el = (e.target as HTMLElement).closest<HTMLElement>("[data-act]");
   if (!el) return;
   void handleAction(el.dataset.act!, el);
@@ -468,6 +506,7 @@ function render(): void {
   content.classList.toggle("workbench", !settings);
   content.innerHTML = settings ? renderSettings(s) : renderOverview(s);
   content.scrollTop = scrollTop;
+  renderUpdateBar(s);
 
   versionEl.textContent = `v${s.version}`;
   updatedEl.textContent = s.updated

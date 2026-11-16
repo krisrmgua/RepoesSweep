@@ -7,16 +7,19 @@ import {
   ipcMain,
   nativeTheme,
   screen,
+  shell,
 } from "electron";
 import { PrefsStore } from "./prefs";
 import { Sweeper, isClean, listedRemoteBranches } from "./sweeper";
 import { createTrayIcon, headerMarkDataUrl } from "./trayIcon";
 import type { PanelState, Prefs, RemoteDeleteRequest } from "./types";
+import { UpdateChecker } from "./updateCheck";
 
 let tray: Tray | null = null;
 let panel: BrowserWindow | null = null;
 let prefs: PrefsStore;
 let sweeper: Sweeper;
+let updates: UpdateChecker;
 let scanTimer: ReturnType<typeof setInterval> | null = null;
 let lastHiddenAt = 0;
 let iconKey = "";
@@ -143,6 +146,7 @@ function panelState(): PanelState {
     platform: process.platform,
     version: app.getVersion(),
     mark: headerMarkDataUrl(clean),
+    updateAvailable: updates?.snapshot() ?? null,
   };
 }
 
@@ -221,12 +225,20 @@ function wireIpc(): void {
   ipcMain.handle("sweep:fitHeight", (_e, height: unknown) => {
     if (typeof height === "number" && Number.isFinite(height)) fitPanelToContent(height);
   });
+  ipcMain.handle("sweep:openExternal", (_e, url: unknown) => {
+    if (typeof url !== "string" || !/^https:\/\//i.test(url)) return;
+    void shell.openExternal(url);
+  });
+  ipcMain.handle("sweep:dismissUpdate", () => {
+    updates?.dismiss();
+  });
 }
 
 function boot(): void {
   if (process.platform === "darwin") app.dock?.hide();
   prefs = new PrefsStore();
   sweeper = new Sweeper(prefs);
+  updates = new UpdateChecker("krisrmgua", "RepoesSweep", () => app.getVersion(), broadcast);
 
   sweeper.onChange(() => broadcast());
   prefs.onChange((prev, next) => {
@@ -256,6 +268,7 @@ function boot(): void {
   applyLoginItem();
   void sweeper.refresh(true);
   scheduleTimer();
+  updates.start();
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -267,6 +280,7 @@ if (!gotLock) {
   app.on("second-instance", () => togglePanel());
   app.on("before-quit", () => {
     if (scanTimer) clearInterval(scanTimer);
+    updates?.stop();
   });
   // Tray app: stay alive with no windows.
   app.on("window-all-closed", () => {});

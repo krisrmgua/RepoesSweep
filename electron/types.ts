@@ -63,6 +63,12 @@ export interface RemoteDeleteRequest {
   scope: DeleteScope | null;
 }
 
+/** Newer GitHub tag than the running build, when the update check finds one. */
+export interface AppUpdate {
+  version: string;
+  url: string;
+}
+
 export interface PanelState {
   repos: RepoStatus[];
   prefs: Prefs;
@@ -77,4 +83,6 @@ export interface PanelState {
   version: string;
   /** Header mark as a data URL (white wings, diamond tinted by state). */
   mark: string | null;
+  /** Null when current, unknown, or dismissed for this session. */
+  updateAvailable: AppUpdate | null;
 }
