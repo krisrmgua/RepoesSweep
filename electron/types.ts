@@ -18,8 +18,10 @@ export interface RepoStatus {
   primary?: string;
   /** Local branches other than primary. */
   cleanupBranches: string[];
-  /** Subset of cleanupBranches on origin/<primary> (ancestry or local squash-landed). */
+  /** Subset of cleanupBranches reachable from origin/<primary> (true merge). */
   cleanupMerged?: string[];
+  /** Subset of cleanupBranches whose tip change already landed via squash merge. */
+  cleanupSquashMerged?: string[];
   /** Local branches retained because a worktree is using them. */
   protectedCleanupBranches?: string[];
   /** Primary belongs to another worktree; local cleanup must not switch or pull it here. */
