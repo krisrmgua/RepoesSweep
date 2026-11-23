@@ -85,7 +85,7 @@ function outdated(s: PanelState): RepoStatus[] {
 
 /** Names the local branches that are not merged yet, so the confirm dialog can say what -D loses. */
 function unmergedNote(repo: RepoStatus): string {
-  const merged = new Set(repo.cleanupMerged ?? []);
+  const merged = new Set([...(repo.cleanupMerged ?? []), ...(repo.cleanupSquashMerged ?? [])]);
   const unmerged = repo.cleanupBranches.filter(name => !merged.has(name));
   return unmerged.length ? ` Not merged into ${repo.primary ?? "main"} yet: ${unmerged.join(", ")}.` : "";
 }
@@ -436,11 +436,19 @@ function renderOverview(s: PanelState): string {
     if (update && (repoFilter === "all" || repoFilter === "updates")) tasks.push(`<div class="work-task"><span class="task-icon tone-warn">${ICONS.outdated}</span><span class="task-description">${repo.gone ? "Remote branch gone" : `Behind ${plural(repo.behind,"commit")}`}</span><div class="task-actions">${!repo.gone ? `<button class="inline primary" data-act="pull" data-path="${path}">Pull</button>` : ""}<button class="inline" data-act="pullFix" data-path="${path}">Pull &amp; Fix</button></div></div>`);
     if (repo.cleanupBranches.length && (repoFilter === "all" || repoFilter === "cleanup")) {
       const merged = new Set(repo.cleanupMerged ?? []);
+      const squashed = new Set(repo.cleanupSquashMerged ?? []);
       const mergedInto = escapeHtml(repo.primary ?? "main");
       const chips = repo.cleanupBranches.map(name => {
-        const done = merged.has(name);
+        const viaSquash = squashed.has(name);
+        const viaMerge = merged.has(name);
+        const done = viaMerge || viaSquash;
         const tone = done ? (s.prefs.greenForPassing ? "tone-ok" : "tone-muted") : "tone-warn";
-        return `<span class="local-branch"><span>${escapeHtml(name)}</span><span class="branch-state ${tone}">${done ? `Merged into ${mergedInto}` : "Not merged"}</span></span>`;
+        const label = viaSquash
+          ? `Squash merged into ${mergedInto}`
+          : viaMerge
+            ? `Merged into ${mergedInto}`
+            : "Not merged";
+        return `<span class="local-branch"><span>${escapeHtml(name)}</span><span class="branch-state ${tone}">${label}</span></span>`;
       }).join("");
       tasks.push(`<div class="work-task"><span class="task-icon tone-warn">${ICONS.cleanup}</span><span class="task-description"><span class="task-label">Local ${repo.cleanupBranches.length === 1 ? "branch" : "branches"}:</span> ${chips}</span><div class="task-actions"><button class="inline" data-act="clean" data-path="${path}">Clean</button></div></div>`);
     }

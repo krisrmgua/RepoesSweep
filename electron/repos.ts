@@ -62,20 +62,23 @@ function lines(text: string): string[] {
   return text.split(/\r?\n/).filter((l) => l.length > 0);
 }
 
-/** Skip expensive `git cherry` when the branch is huge vs upstream. */
+/** Skip squash detection when the branch is huge vs upstream. */
 const SQUASH_CHERRY_MAX_COMMITS = 40;
 
 /**
- * Local cleanup only: true when `ref` still has commits not in `upstream`
- * ancestry, but every one already landed as a *different* SHA on upstream
- * (`git cherry` all `-`). Empty / huge ranges are not treated as squash-merged.
+ * True when `ref` is not an ancestor of `upstream`, but its cumulative change
+ * already landed there (typical GitHub/GitLab squash merge).
+ *
+ * Per-commit `git cherry` misses multi-commit squashes: each tip commit's
+ * patch differs from the single squash commit. Build a temporary commit with
+ * the branch tip tree parented on the merge-base, then ask `git cherry`
+ * whether upstream already has that combined patch.
  */
 async function isSquashLandedOnUpstream(
   repo: string,
   upstream: string,
   ref: string,
 ): Promise<boolean> {
-  // Cheap gate: cherry walks history; bail if nothing unique or too many commits.
   const [lrc, lout] = await git(
     repo,
     "rev-list",
@@ -86,11 +89,32 @@ async function isSquashLandedOnUpstream(
   const unique = lines(lout);
   if (unique.length === 0 || unique.length > SQUASH_CHERRY_MAX_COMMITS) return false;
 
-  const [rc, out] = await git(repo, "cherry", upstream, ref);
+  const [brc, base] = await git(repo, "merge-base", upstream, ref);
+  if (brc !== 0 || !base) return false;
+
+  const [trc, tree] = await git(repo, "rev-parse", `${ref}^{tree}`);
+  if (trc !== 0 || !tree) return false;
+
+  // Empty cumulative change (tree matches merge-base) — nothing left to land.
+  const [baseTreeRc, baseTree] = await git(repo, "rev-parse", `${base}^{tree}`);
+  if (baseTreeRc === 0 && baseTree === tree) return true;
+
+  const [crc, tmp] = await git(
+    repo,
+    "commit-tree",
+    tree,
+    "-p",
+    base,
+    "-m",
+    "repoes-sweep-squash-check",
+  );
+  if (crc !== 0 || !tmp) return false;
+
+  const [rc, out] = await git(repo, "cherry", upstream, tmp);
   if (rc !== 0) return false;
   const rows = lines(out);
-  if (rows.length === 0) return false;
-  return rows.every((line) => line.startsWith("-"));
+  if (rows.length !== 1) return false;
+  return rows[0].startsWith("-");
 }
 
 export async function primaryBranch(repo: string): Promise<string | undefined> {
@@ -240,6 +264,7 @@ export async function scan(
   if (plan) {
     s.cleanupBranches = plan.candidates;
     s.cleanupMerged = plan.merged;
+    s.cleanupSquashMerged = plan.squashMerged;
     s.protectedCleanupBranches = plan.protected;
     s.cleanupPrimaryElsewhere = plan.primaryElsewhere;
   } else s.error = "Could not inspect local branch worktrees";
@@ -520,7 +545,11 @@ async function heldByOtherWorktree(repo: string, branch: string): Promise<boolea
 
 /** Branch ownership is shared by all linked worktrees. Never move another worktree. */
 async function cleanupPlan(repo: string, primary: string): Promise<{
-  candidates: string[]; merged: string[]; protected: string[]; primaryElsewhere: boolean;
+  candidates: string[];
+  merged: string[];
+  squashMerged: string[];
+  protected: string[];
+  primaryElsewhere: boolean;
 } | null> {
   const [rc, out] = await git(repo, "for-each-ref", "--format=%(refname:short)%09%(worktreepath)", "refs/heads/");
   if (rc !== 0) return null;
@@ -558,13 +587,11 @@ async function cleanupPlan(repo: string, primary: string): Promise<{
   const squashFlags = await Promise.all(
     maybeSquash.map((name) => isSquashLandedOnUpstream(repo, upstream, name)),
   );
-  const merged = [
-    ...ancestryMerged,
-    ...maybeSquash.filter((_, i) => squashFlags[i]),
-  ];
+  const squashMerged = maybeSquash.filter((_, i) => squashFlags[i]);
   return {
     candidates,
-    merged,
+    merged: ancestryMerged,
+    squashMerged,
     protected: protectedBranches,
     primaryElsewhere,
   };
